@@ -1,4 +1,5 @@
 import os
+import time
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -49,3 +50,4 @@ Keep the tone professional but direct. No generic advice.
     )
 
     return response.choices[0].message.content
+
