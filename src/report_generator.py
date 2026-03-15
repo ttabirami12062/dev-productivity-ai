@@ -1,13 +1,12 @@
 import os
-import time
 from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env'))
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
 def generate_health_report(pr_metrics, commit_metrics, health_score, rag_context=""):
+    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
     prompt = f"""
 You are an AI assistant that analyzes software engineering team health data and generates actionable reports for engineering managers.
 
@@ -50,4 +49,3 @@ Keep the tone professional but direct. No generic advice.
     )
 
     return response.choices[0].message.content
-
