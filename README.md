@@ -65,7 +65,6 @@ Most AI portfolio projects stop at calling an API. This one goes further:
 
 **CI/CD evaluation gate** — a golden dataset of test scenarios runs on every push. If report quality drops below threshold, the build fails. This is how real AI teams operate.
 
-**Feedback system** — users can rate reports and leave contact details. Feedback is saved and emailed instantly.
 
 ---
 
@@ -122,8 +121,9 @@ dev-productivity-ai/
 
 Built by Abirami Thiyagarajan, MS Computer Science at the University of Oklahoma.
 
-I am interested in building AI systems that solve real operational problems — not demos, but things that actually work in production.
+I love building AI systems that solve real operational problems — not demos, but things that actually work in production. I am always looking to collaborate, learn from others, and work on projects that make a real difference.
 
-If you are an engineering manager or team lead and found this useful, I would love to connect and hear how this could help your team.
+I am currently looking for full-time opportunities in software engineering and AI/ML roles in the US. If you found this project useful, are working on something interesting, or just want to connect and exchange ideas — I would genuinely love to hear from you.
 
 [GitHub](https://github.com/ttabirami12062) · [LinkedIn](https://linkedin.com/in/abirami-thiyagarajan)
+
