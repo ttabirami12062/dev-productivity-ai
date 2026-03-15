@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
@@ -10,6 +11,7 @@ from src.github_client import get_pull_requests, get_commits, get_contributors
 from src.metrics import calculate_pr_metrics, calculate_commit_metrics, calculate_health_score
 from src.report_generator import generate_health_report
 from src.rag_pipeline import build_rag_context
+from src.observability import track_report_generation
 
 def run_analysis(owner, repo):
     print(f"\nAnalyzing repository: {owner}/{repo}")
@@ -43,16 +45,23 @@ def run_analysis(owner, repo):
     print("Historical context retrieved!")
 
     print("\nGenerating AI health report...")
+    start_time = time.time()
     report = generate_health_report(pr_metrics, commit_metrics, health_score, rag_context)
+    latency_ms = round((time.time() - start_time) * 1000)
+
+    cost_estimate = round((len(report.split()) * 2) * 0.000002, 6)
+
+    print("\nTracking to Langfuse...")
+    track_report_generation(pr_metrics, commit_metrics, health_score, report, latency_ms, cost_estimate)
 
     print("\n" + "=" * 50)
     print("WEEKLY TEAM HEALTH REPORT")
     print("=" * 50)
     print(report)
     print("=" * 50)
+    print(f"\nLatency: {latency_ms}ms | Cost: ${cost_estimate}")
 
 if __name__ == "__main__":
     owner = "ttabirami12062"
     repo = "IPMS"
     run_analysis(owner, repo)
-
