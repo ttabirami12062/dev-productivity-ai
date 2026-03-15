@@ -1,0 +1,55 @@
+{
+    "test_cases": [
+      {
+        "id": 1,
+        "scenario": "High PR review time with one overloaded reviewer",
+        "pr_metrics": {
+          "total_prs": 10,
+          "merged_prs": 6,
+          "open_prs": 4,
+          "avg_review_time_hours": 52.0
+        },
+        "commit_metrics": {
+          "total_commits": 20,
+          "commits_per_author": {"Alice": 16, "Bob": 2, "Charlie": 2},
+          "most_active_author": "Alice"
+        },
+        "health_score": 45,
+        "expected_keywords": ["review", "risk", "alice", "workload"]
+      },
+      {
+        "id": 2,
+        "scenario": "Healthy team with balanced workload",
+        "pr_metrics": {
+          "total_prs": 12,
+          "merged_prs": 10,
+          "open_prs": 2,
+          "avg_review_time_hours": 18.0
+        },
+        "commit_metrics": {
+          "total_commits": 30,
+          "commits_per_author": {"Alice": 10, "Bob": 10, "Charlie": 10},
+          "most_active_author": "Alice"
+        },
+        "health_score": 100,
+        "expected_keywords": ["health", "team", "performance", "score"]
+      },
+      {
+        "id": 3,
+        "scenario": "Too many open PRs causing delivery risk",
+        "pr_metrics": {
+          "total_prs": 15,
+          "merged_prs": 5,
+          "open_prs": 10,
+          "avg_review_time_hours": 36.0
+        },
+        "commit_metrics": {
+          "total_commits": 25,
+          "commits_per_author": {"Alice": 12, "Bob": 8, "Charlie": 5},
+          "most_active_author": "Alice"
+        },
+        "health_score": 55,
+        "expected_keywords": ["open prs", "delivery", "risk", "review"]
+      }
+    ]
+  }
