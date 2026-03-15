@@ -2,11 +2,11 @@ import os
 from openai import OpenAI
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env'))
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-def generate_health_report(pr_metrics, commit_metrics, health_score):
+def generate_health_report(pr_metrics, commit_metrics, health_score, rag_context=""):
     prompt = f"""
 You are an AI assistant that analyzes software engineering team health data and generates actionable reports for engineering managers.
 
@@ -25,12 +25,16 @@ COMMIT METRICS:
 
 TEAM HEALTH SCORE: {health_score}/100
 
+HISTORICAL CONTEXT FROM PAST INCIDENTS:
+{rag_context if rag_context else "No historical context available."}
+
 Generate a clear and concise weekly team health report with:
 1. Overall health summary in 2 sentences
 2. Top 2 risks or warning signs
-3. Top 2 specific actionable recommendations
+3. Top 2 specific actionable recommendations based on historical context
 4. One positive observation about the team
 
+If historical context is available, reference it specifically in your recommendations.
 Keep the tone professional but direct. No generic advice.
 """
 
@@ -40,28 +44,8 @@ Keep the tone professional but direct. No generic advice.
             {"role": "system", "content": "You are an expert engineering team health analyst."},
             {"role": "user", "content": prompt}
         ],
-        max_tokens=500,
+        max_tokens=600,
         temperature=0.7
     )
 
     return response.choices[0].message.content
-
-if __name__ == "__main__":
-    sample_pr_metrics = {
-        "total_prs": 2,
-        "merged_prs": 1,
-        "open_prs": 1,
-        "avg_review_time_hours": 48.0
-    }
-    sample_commit_metrics = {
-        "total_commits": 3,
-        "commits_per_author": {"Abi": 2, "John": 1},
-        "most_active_author": "Abi"
-    }
-    health_score = 85
-
-    print("Generating AI health report...")
-    report = generate_health_report(sample_pr_metrics, sample_commit_metrics, health_score)
-    print("\n--- TEAM HEALTH REPORT ---")
-    print(report)
-

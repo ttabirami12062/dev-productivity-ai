@@ -2,13 +2,14 @@ import os
 import sys
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from src.github_client import get_pull_requests, get_commits, get_contributors
 from src.metrics import calculate_pr_metrics, calculate_commit_metrics, calculate_health_score
 from src.report_generator import generate_health_report
+from src.rag_pipeline import build_rag_context
 
 def run_analysis(owner, repo):
     print(f"\nAnalyzing repository: {owner}/{repo}")
@@ -37,8 +38,12 @@ def run_analysis(owner, repo):
 
     print(f"\nTEAM HEALTH SCORE: {health_score}/100")
 
+    print("\nFetching historical context from RAG...")
+    rag_context = build_rag_context(pr_metrics, commit_metrics, health_score)
+    print("Historical context retrieved!")
+
     print("\nGenerating AI health report...")
-    report = generate_health_report(pr_metrics, commit_metrics, health_score)
+    report = generate_health_report(pr_metrics, commit_metrics, health_score, rag_context)
 
     print("\n" + "=" * 50)
     print("WEEKLY TEAM HEALTH REPORT")

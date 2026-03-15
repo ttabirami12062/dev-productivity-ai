@@ -1,0 +1,27 @@
+INCIDENT REPORT - MARCH 2024
+
+Date: March 15, 2024
+Severity: High
+Duration: 6 hours
+
+Summary:
+The payment service went down for 6 hours causing 30% revenue loss.
+
+Root Cause:
+PR review bottleneck. One senior developer was reviewing all PRs alone.
+Three critical bug fix PRs sat unreviewed for 48 hours before merging.
+A breaking change slipped through due to rushed review.
+
+Warning Signs That Were Missed:
+- PR review time increased from 12 hours to 48 hours over 2 weeks
+- One developer had 80% of all review assignments
+- Code churn was high in the payment module for 3 consecutive weeks
+
+Resolution:
+- Redistributed PR reviews across 3 developers
+- Set maximum review time of 24 hours
+- Added required two reviewer rule for payment module
+
+Lessons Learned:
+When average PR review time exceeds 36 hours and one person handles
+over 70% of reviews, delivery risk is critical. Redistribute immediately.

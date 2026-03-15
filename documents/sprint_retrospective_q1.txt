@@ -1,0 +1,28 @@
+SPRINT RETROSPECTIVE - Q1 2024
+
+Sprint: March 1-15, 2024
+Team Size: 5 developers
+Sprint Goal: Launch payment module v2
+
+What Went Well:
+- Team communication was strong
+- Daily standups were productive
+- Unit test coverage increased to 85%
+
+What Went Wrong:
+- Missed sprint goal by 3 days
+- One developer handled 75% of all code reviews
+- PR review time averaged 52 hours
+- Same authentication bug appeared 3 times in different PRs
+- High code churn in payment module indicated unstable code
+
+Action Items:
+1. Rotate code review assignments weekly
+2. Set PR review SLA of 24 hours maximum
+3. Flag any file with more than 3 bug fixes in one sprint
+4. Add automated checks for code churn thresholds
+
+Key Insight:
+When commit frequency drops suddenly for a developer while their
+review load increases, it is an early burnout signal. Watch for this
+pattern and redistribute work immediately before it impacts delivery.
