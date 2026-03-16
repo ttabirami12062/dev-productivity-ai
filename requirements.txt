@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+openai
+langchain
+langchain-community
+langchain-openai
+langchain-text-splitters
+pinecone
+python-dotenv
+requests
+langfuse
+pydantic
+python-multipart
