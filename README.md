@@ -6,6 +6,16 @@ This project is my attempt to fix that.
 
 ---
 
+## Live Demo
+
+**Try it yourself:** [dev-productivity-ai.vercel.app](https://dev-productivity-ai.vercel.app)
+
+Enter any public GitHub repository and get an instant AI-powered team health report in seconds.
+
+> Note: The first request may take 30–50 seconds as the free backend spins up. Subsequent requests are fast.
+
+---
+
 ## What It Does
 
 It connects to your GitHub, watches how your team works, and generates a report that sounds like this:
@@ -13,12 +23,6 @@ It connects to your GitHub, watches how your team works, and generates a report 
 > "PR review time jumped to 52 hours this week. One developer handled 78% of all reviews. This exact pattern appeared in your March 2024 incident. Based on your own retrospective, the fix was to redistribute reviews across the team immediately."
 
 Not generic advice. Not just a dashboard. Specific, grounded, actionable intelligence built from your team's own history.
-
----
-
-## Live Demo
-
-Enter any public GitHub repository on the dashboard and get an instant AI-powered team health report in seconds.
 
 ---
 
@@ -80,6 +84,8 @@ Most AI portfolio projects stop at calling an API. This one goes further:
 | Frontend | React + TypeScript |
 | Backend | FastAPI (Python) |
 | CI/CD | GitHub Actions |
+| Frontend Hosting | Vercel |
+| Backend Hosting | Render |
 
 ---
 
@@ -126,4 +132,3 @@ I love building AI systems that solve real operational problems — not demos, b
 I am currently looking for full-time opportunities in software engineering and AI/ML roles in the US. If you found this project useful, are working on something interesting, or just want to connect and exchange ideas — I would genuinely love to hear from you.
 
 [GitHub](https://github.com/ttabirami12062) · [LinkedIn](https://linkedin.com/in/abirami-thiyagarajan)
-
