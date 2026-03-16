@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import axios from 'axios';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const colors = {
   bg: '#080C14',
@@ -244,7 +244,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: colors.textSecondary,
     lineHeight: '1.85',
     fontSize: '14px',
-    whiteSpace: 'pre-wrap' as const,
   },
   feedbackCard: {
     background: colors.surface,
@@ -328,11 +327,6 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '4px',
     padding: '20px',
     textAlign: 'center' as const,
-  },
-  divider: {
-    height: '1px',
-    background: colors.border,
-    margin: '20px 0',
   },
   footer: {
     borderTop: `1px solid ${colors.border}`,
