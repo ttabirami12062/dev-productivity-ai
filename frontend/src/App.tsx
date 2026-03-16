@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
+const API_URL = 'https://dev-productivity-ai.onrender.com';
+
 const colors = {
   bg: '#080C14',
   surface: '#0D1421',
@@ -377,7 +379,7 @@ function ReviewSection({ owner, repo }: { owner: string; repo: string }) {
   const [submitted, setSubmitted] = useState(false);
 
   const submit = async () => {
-    await axios.post('http://localhost:8000/review', { owner, repo, rating, comment, name, user_email: userEmail, role });
+    await axios.post(`${API_URL}/review`, { owner, repo, rating, comment, name, user_email: userEmail, role });
     setSubmitted(true);
   };
 
@@ -439,7 +441,7 @@ export default function App() {
     setError('');
     setResult(null);
     try {
-      const res = await axios.post('http://localhost:8000/analyze', { owner, repo });
+      const res = await axios.post(`${API_URL}/analyze`, { owner, repo });
       if (res.data.success) setResult(res.data);
       else setError(res.data.error || 'Analysis failed');
     } catch {
