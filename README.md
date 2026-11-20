@@ -55,6 +55,7 @@ flowchart LR
 4. **Retrieve.** The warning signs are embedded and searched against a Pinecone index of past incident reports and sprint retrospectives. Each match comes back with a similarity score that's shown to the user.
 5. **Generate.** The metrics, the reasons and the retrieved documents go to `gpt-5.4-mini`, which returns JSON: a headline, up to two risks, up to two actions and one thing going well, each citing numbered sources. The model is told to use only the numbers it's given.
 6. **Validate.** The response is checked against the expected shape, and any citation pointing to a source that wasn't provided is removed before it reaches the page.
+7. **Trace.** Every analysis is recorded in Langfuse as one trace: the history search, the embedding call and the report generation, each with its latency, token counts and cost, plus the final health score.
 
 A "How to read this" panel in the app explains every number, chart and label in plain language. The layout also works on phones.
 
@@ -72,7 +73,8 @@ A "How to read this" panel in the app explains every number, chart and label in 
 | Structured JSON reports instead of free text | The dashboard can render findings by type, and citations can be checked in code |
 | A reason for every point deducted | Managers can see why the score moved, and disagree with it if they want |
 | Time zone sent by the browser | Mixing UTC and local time moved PRs into the wrong week during testing |
-| One-hour cache, a per-visitor hourly limit and a site-wide daily cap | Keeps API costs predictable on a public demo (a report costs well under a cent) |
+| One-hour cache, a per-visitor hourly limit and a site-wide daily cap | Keeps API costs predictable on a public demo. Langfuse measures a report at about $0.0025 |
+| Langfuse tracing, switched off when keys are absent | Latency, tokens and cost per step are visible in production, while CI and fresh checkouts run without it |
 | Exact library versions in `requirements.txt` | An unpinned dependency update is what originally broke the live site |
 | Read-only GitHub token scoped to public repositories | The least access the job needs |
 | A scheduled health check every 10 minutes | Keeps the free Render server from sleeping, so visitors don't wait a minute for it to wake |
@@ -99,6 +101,7 @@ Before going live, the pipeline was also tested against twelve real projects, in
 | Data | GitHub REST API |
 | Retrieval | Pinecone serverless index, OpenAI `text-embedding-ada-002` embeddings, LangChain document loading and splitting |
 | Generation | OpenAI `gpt-5.4-mini` with JSON output |
+| Observability | Langfuse traces for each report (retrieval, embedding and generation steps) |
 | CI | GitHub Actions: scoring tests, report evaluation, and the keep-awake job |
 
 ---
@@ -111,14 +114,13 @@ These are honest gaps, and the next things on the roadmap.
 - **No stored history.** Each analysis covers six weeks fetched live, so there are no month-over-month trends yet.
 - **Sampling on busy repositories.** At most 300 PRs and 300 commits are read, and reviews are checked on the 40 most recently merged PRs.
 - **Public repositories only.** Private repositories would need a GitHub App with read-only, per-repository access, plus login and per-company data separation.
-- **No LLM observability yet.** Token counts are returned with each report, but they aren't tracked over time.
 
 ## Roadmap
 
 - [ ] Teams upload their own incident reports and retrospectives, stored in a separate Pinecone namespace per team
 - [ ] Store weekly snapshots in Postgres, collected by a nightly job, for long-term trends
 - [ ] More signals: cycle time from first commit, time to first review, code churn, files with repeated bug fixes, after-hours work in each contributor's time zone
-- [ ] Langfuse tracing for latency, tokens and cost per report
+- [x] Langfuse tracing for latency, tokens and cost per report
 - [ ] A second model that checks each cited source actually supports the claim
 - [ ] A weekly email report for managers
 
@@ -159,7 +161,8 @@ dev-productivity-ai/
 │   ├── github_client.py      # Fetches six weeks of PRs, commits and reviews
 │   ├── metrics.py            # Metrics, health score and the reason for each deduction
 │   ├── rag_pipeline.py       # Builds and searches the Pinecone index
-│   └── report_generator.py   # Prompt, JSON report and citation checks
+│   ├── report_generator.py   # Prompt, JSON report and citation checks
+│   └── observability.py      # Langfuse tracing (off when keys are missing)
 ├── documents/                # Sample incident report and retrospective
 ├── tests/                    # Scoring tests, golden dataset and report evaluation
 ├── frontend/                 # React and TypeScript dashboard
