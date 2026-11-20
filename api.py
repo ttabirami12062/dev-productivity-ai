@@ -1,7 +1,6 @@
 import os
 import re
 import sys
-import json
 import time
 import logging
 import smtplib
@@ -23,7 +22,7 @@ from src.github_client import GitHubError, fetch_repo_activity
 from src.metrics import calculate_metrics, calculate_health_score, health_status
 from src.report_generator import generate_health_report
 from src.rag_pipeline import retrieve_history
-from src.observability import report_trace
+from src.observability import record_feedback, report_trace
 from src.citation_check import numbers_grounded
 from src.report_generator import team_data_text
 
@@ -54,21 +53,8 @@ _cache, _requests_by_ip, _lock = {}, {}, threading.Lock()
 _daily = {"day": "", "count": 0}
 NAME = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
 
-REVIEWS_FILE = "reviews.json"
 GMAIL_ADDRESS = os.getenv("GMAIL_ADDRESS")
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
-
-def load_reviews():
-    if os.path.exists(REVIEWS_FILE):
-        with open(REVIEWS_FILE, "r") as f:
-            return json.load(f)
-    return []
-
-def save_review(review):
-    reviews = load_reviews()
-    reviews.append(review)
-    with open(REVIEWS_FILE, "w") as f:
-        json.dump(reviews, f, indent=2)
 
 def send_email(review):
     try:
@@ -131,6 +117,8 @@ class ReviewRequest(BaseModel):
     name: str = Field("", max_length=100)
     user_email: str = Field("", max_length=200)
     role: str = Field("", max_length=100)
+    # Links the rating to the report's Langfuse trace.
+    trace_id: str = Field("", max_length=64)
 
 
 def _client_ip(request):
@@ -234,6 +222,7 @@ def analyze(body: AnalyzeRequest, request: Request):
         "generated_seconds": round(time.time() - started, 1),
         "usage": usage,
         "checks": {"numbers_grounded": grounded, "unsupported_numbers": unsupported},
+        "trace_id": record.trace_id,
     }
     _cache[key] = (time.time(), result)
     return result
@@ -250,7 +239,12 @@ def submit_review(request: ReviewRequest):
         "role": request.role,
         "timestamp": time.time()
     }
-    save_review(review)
+    # Render's disk is wiped on every deploy, so nothing is written there. The rating and
+    # comment go to Langfuse on the report's trace; the full details go to the owner by email.
+    try:
+        record_feedback(request.trace_id, request.rating, request.comment, request.role)
+    except Exception:
+        log.exception("Could not record feedback in Langfuse")
     send_email(review)
     return {"success": True, "message": "Review submitted!"}
 

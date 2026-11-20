@@ -10,7 +10,7 @@ function Star({ filled }: { filled: boolean }) {
   );
 }
 
-export default function Feedback({ owner, repo }: { owner: string; repo: string }) {
+export default function Feedback({ owner, repo, traceId }: { owner: string; repo: string; traceId?: string | null }) {
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [name, setName] = useState('');
@@ -31,7 +31,7 @@ export default function Feedback({ owner, repo }: { owner: string; repo: string 
     e.preventDefault();
     if (!rating) return;
     setState('sending');
-    const ok = await sendFeedback({ owner, repo, rating, comment, name, user_email: email, role });
+    const ok = await sendFeedback({ owner, repo, rating, comment, name, user_email: email, role, trace_id: traceId });
     setState(ok ? 'sent' : 'failed');
   };
 

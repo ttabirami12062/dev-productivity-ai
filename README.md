@@ -74,6 +74,7 @@ A "How to read this" panel in the app explains every number, chart and label in 
 | A reason for every point deducted | Managers can see why the score moved, and disagree with it if they want |
 | Time zone sent by the browser | Mixing UTC and local time moved PRs into the wrong week during testing |
 | One-hour cache, a per-visitor hourly limit and a site-wide daily cap | Keeps API costs predictable on a public demo. Langfuse measures a report at about $0.0025 |
+| Visitor ratings stored as Langfuse scores on the report's trace | Feedback survives redeploys (Render's disk doesn't) and sits next to the exact report it rates; names and emails go only to the owner's inbox |
 | Langfuse tracing, switched off when keys are absent | Latency, tokens and cost per step are visible in production, while CI and fresh checkouts run without it |
 | Exact library versions in `requirements.txt` | An unpinned dependency update is what originally broke the live site |
 | GitHub GraphQL instead of REST | One query returns PRs with their reviews; a busy repo went from 45 requests and 9.3s to 3 requests and 4.4s, with identical results |

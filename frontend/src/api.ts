@@ -44,6 +44,7 @@ export async function sendFeedback(body: {
   name: string;
   user_email: string;
   role: string;
+  trace_id?: string | null;
 }): Promise<boolean> {
   try {
     await axios.post(`${API_URL}/review`, body, { timeout: 30000 });

@@ -64,6 +64,7 @@ export interface Analysis {
   generated_seconds: number;
   cached?: boolean;
   checks?: { numbers_grounded: boolean; unsupported_numbers: string[] };
+  trace_id?: string | null;
 }
 
 export type AnalyzeResponse = Analysis | { success: false; error: string };

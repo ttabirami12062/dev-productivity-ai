@@ -108,7 +108,7 @@ export default function App() {
         {result && (
           <>
             <Dashboard data={result} />
-            <Feedback owner={result.owner} repo={result.repo} />
+            <Feedback owner={result.owner} repo={result.repo} traceId={result.trace_id} />
           </>
         )}
 
