@@ -3,11 +3,12 @@ import sys
 import json
 import time
 import smtplib
+from html import escape
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -48,6 +49,8 @@ def save_review(review):
 def send_email(review):
     try:
         msg = MIMEMultipart("alternative")
+        # Everything below comes from a public form, so escape it before it goes into HTML.
+        r = {k: escape(str(v)) if isinstance(v, str) else v for k, v in review.items()}
         msg["Subject"] = f"New Feedback - {review['repo']} - {review['rating']}/5 stars"
         msg["From"] = GMAIL_ADDRESS
         msg["To"] = GMAIL_ADDRESS
@@ -58,12 +61,12 @@ def send_email(review):
             <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; padding: 32px;">
                 <h2 style="color: #1A56DB;">New Feedback Received</h2>
                 <hr/>
-                <p><strong>Repository:</strong> {review['owner']}/{review['repo']}</p>
+                <p><strong>Repository:</strong> {r['owner']}/{r['repo']}</p>
                 <p><strong>Rating:</strong> {'★' * review['rating']}{'☆' * (5 - review['rating'])} ({review['rating']}/5)</p>
-                <p><strong>Comment:</strong> {review.get('comment', 'No comment left') or 'No comment left'}</p>
-                <p><strong>Name:</strong> {review.get('name', 'Not provided') or 'Not provided'}</p>
-                <p><strong>Email:</strong> {review.get('user_email', 'Not provided') or 'Not provided'}</p>
-                <p><strong>Role:</strong> {review.get('role', 'Not specified') or 'Not specified'}</p>
+                <p><strong>Comment:</strong> {r.get('comment') or 'No comment left'}</p>
+                <p><strong>Name:</strong> {r.get('name') or 'Not provided'}</p>
+                <p><strong>Email:</strong> {r.get('user_email') or 'Not provided'}</p>
+                <p><strong>Role:</strong> {r.get('role') or 'Not specified'}</p>
                 <p><strong>Time:</strong> {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(review['timestamp']))}</p>
                 <hr/>
                 <p style="color: #888; font-size: 12px;">Dev Productivity Intelligence - Feedback System</p>
@@ -89,7 +92,7 @@ class AnalyzeRequest(BaseModel):
 class ReviewRequest(BaseModel):
     owner: str
     repo: str
-    rating: int
+    rating: int = Field(ge=1, le=5)
     comment: str = ""
     name: str = ""
     user_email: str = ""
@@ -136,10 +139,6 @@ async def submit_review(request: ReviewRequest):
     save_review(review)
     send_email(review)
     return {"success": True, "message": "Review submitted!"}
-
-@app.get("/reviews")
-async def get_reviews():
-    return {"reviews": load_reviews()}
 
 @app.get("/health")
 async def health():
