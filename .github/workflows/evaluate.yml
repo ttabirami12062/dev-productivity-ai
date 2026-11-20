@@ -28,6 +28,9 @@ jobs:
     - name: Check the health score math
       run: python tests/test_metrics.py
 
+    - name: Check the made-up number detector
+      run: python tests/test_citation_check.py
+
     # Calls the real model, so it only runs when the OpenAI key secret is set.
     - name: Check report quality against the golden dataset
       if: ${{ env.OPENAI_API_KEY != '' }}

@@ -4,10 +4,13 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from src.citation_check import judge_citations, numbers_grounded
 from src.metrics import calculate_health_score
-from src.report_generator import generate_health_report, report_as_text
+from src.report_generator import generate_health_report, report_as_text, team_data_text
 
 THRESHOLD = 0.8
+# Share of cited findings the judge must agree are supported by their sources.
+FAITHFULNESS_THRESHOLD = 0.9
 SAMPLE_HISTORY = [{"title": "Incident Report - March 2024", "match": 88,
                    "text": "One senior developer reviewed all PRs alone. Fix: redistribute reviews, 24 hour review limit."}]
 
@@ -29,11 +32,17 @@ def metrics_for(case):
 
 
 def check(case):
-    """Returns a list of problems with the report; an empty list means it passed."""
+    """Returns (score, problems, judgements); no problems means the report passed."""
     metrics = metrics_for(case)
     score, signals = calculate_health_score(metrics)
     report, _ = generate_health_report("example", "team", metrics, score, signals, SAMPLE_HISTORY)
     problems = []
+
+    data = team_data_text("example", "team", metrics, score, signals)
+    grounded, unsupported = numbers_grounded(report, data, *(f"{h['title']}\n{h['text']}" for h in SAMPLE_HISTORY), *signals)
+    if not grounded:
+        problems.append(f"used numbers that aren't in its data: {unsupported}")
+    judgements = judge_citations(report, data, SAMPLE_HISTORY)
 
     if not report["headline"]:
         problems.append("no headline")
@@ -50,22 +59,28 @@ def check(case):
     for kw in case["expected_keywords"]:
         if kw not in text:
             problems.append(f"never mentions '{kw}'")
-    return score, problems
+    return score, problems, judgements
 
 
 def run_evaluation():
     with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "golden_dataset.json")) as f:
         cases = json.load(f)["test_cases"]
 
-    passed = 0
+    passed, judged, supported = 0, 0, 0
     for case in cases:
-        score, problems = check(case)
+        score, problems, judgements = check(case)
         passed += not problems
         print(f"Test {case['id']}: {case['scenario']} (score {score}): {'PASS' if not problems else 'FAIL: ' + '; '.join(problems)}")
+        for j in judgements:
+            judged += 1
+            supported += j["supported"]
+            print(f"    citation {'supported' if j['supported'] else 'NOT SUPPORTED'}: {j['title']} ({j['reason']})")
 
     rate = passed / len(cases)
-    print(f"\n{passed}/{len(cases)} passed ({rate:.0%}), gate is {THRESHOLD:.0%}")
-    sys.exit(0 if rate >= THRESHOLD else 1)
+    faithfulness = supported / judged if judged else 1.0
+    print(f"\n{passed}/{len(cases)} reports passed ({rate:.0%}), gate is {THRESHOLD:.0%}")
+    print(f"{supported}/{judged} cited findings supported by their sources ({faithfulness:.0%}), gate is {FAITHFULNESS_THRESHOLD:.0%}")
+    sys.exit(0 if rate >= THRESHOLD and faithfulness >= FAITHFULNESS_THRESHOLD else 1)
 
 
 if __name__ == "__main__":

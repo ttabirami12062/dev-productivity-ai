@@ -17,6 +17,8 @@ Rules:
 - Use only the numbers in TEAM DATA. Never invent numbers, names or dates.
 - HISTORY entries are numbered. When a sentence relies on one, cite it as its number in "sources".
   Cite the GitHub data as source 0. Never cite a number that isn't listed.
+- Any claim about this team's current numbers or situation must cite 0. Cite a HISTORY entry only
+  for what happened before or the fix it recommends; a finding using both cites both.
 - If HISTORY doesn't fit this team's situation, don't force it in.
 - Plain, direct sentences. No filler, no generic advice, no emojis.
 - Write waits of 48 hours or more in days (say "30 days", not "726 hours").
@@ -32,15 +34,17 @@ SHAPE = """{
     {"kind": "positive", "title": "something going well", "detail": "1 sentence", "sources": [0]}
   ]
 }
-Give up to 2 risks, up to 2 actions and exactly 1 positive. A healthy team may have 0 risks."""
+Give up to 2 risks, up to 2 actions and exactly 1 positive.
+Only list a risk for something in "What lowered the score". If nothing lowered the score, give no risks:
+a reviewer under the 50% limit or a wait under the 24-hour target is not a risk."""
 
 
-def _team_data(owner, repo, metrics, score, signals):
+def team_data_text(owner, repo, metrics, score, signals):
     prs, reviews, commits = metrics["prs"], metrics["reviews"], metrics["commits"]
     # Pre-written as "7.4 hours" / "5.3 days" so the model copies readable values.
     weekly = ", ".join(f"{w['label']}: {duration(w['median_hours']) if w['median_hours'] is not None else 'no merges'}"
                        for w in prs["weekly"])
-    return f"""Repository: {owner}/{repo}, last {metrics['window']['days']} days ({metrics['window']['since']} to {metrics['window']['until']}, dates in {metrics['window'].get('timezone', 'UTC')})
+    return f"""Repository: {owner}/{repo}, last {metrics['window']['days']} days, {metrics['window']['days'] // 7} weeks ({metrics['window']['since']} to {metrics['window']['until']}, dates in {metrics['window'].get('timezone', 'UTC')})
 People active: {metrics['people']}{' (solo project, so workload balance does not apply)' if metrics['solo'] else ''}
 {'VERY LITTLE ACTIVITY: say plainly that there is too little recent work to judge team health. Give no risks and no actions, only the positive finding.' if metrics.get('quiet') else ''}
 {'This project does not use GitHub pull requests (they are switched off), so judge it on commits only and do not mention PR or review metrics.' if not metrics.get('uses_prs', True) else ''}
@@ -49,8 +53,8 @@ What lowered the score: {' '.join(signals) if signals else 'nothing'}
 PRs: {prs['total']} active, {prs['merged']} merged, {prs['open']} open ({prs['stale_open']} open over 3 days), {prs['closed_unmerged']} closed without merging
 Median time from open to merge: {prs['median_merge_hours']} hours{f" (about {duration(prs['median_merge_hours'])})" if prs['median_merge_hours'] and prs['median_merge_hours'] >= 48 else ''}
 Median wait to merge, by week: {weekly}
-Reviews: {reviews['total']} on {reviews['reviewed_prs']} merged PRs; by person: {reviews['per_reviewer'] or 'none'}
-Commits: {commits['total']}; by person: {commits['per_author']}"""
+Reviews: {reviews['total']} on {reviews['reviewed_prs']} merged PRs; by person: {reviews['per_reviewer'] or 'none'}{f"; top reviewer {reviews['top_reviewer']} did {reviews['top_share']}%" if reviews['total'] else ''}
+Commits: {commits['total']}; by person: {commits['per_author']}{f"; top author {commits['top_author']} made {commits['top_share']}%" if commits['total'] else ''}"""
 
 
 def _history_block(history):
@@ -81,7 +85,7 @@ def _clean(report, max_source):
 
 def generate_health_report(owner, repo, metrics, score, signals, history):
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-    prompt = f"TEAM DATA\n{_team_data(owner, repo, metrics, score, signals)}\n\nHISTORY\n{_history_block(history)}\n\nReply in this JSON shape:\n{SHAPE}"
+    prompt = f"TEAM DATA\n{team_data_text(owner, repo, metrics, score, signals)}\n\nHISTORY\n{_history_block(history)}\n\nReply in this JSON shape:\n{SHAPE}"
     options = {}
     # Reasoning models (gpt-5 family, o-series) reject temperature; low effort keeps them fast.
     if MODEL.startswith(("gpt-5", "o")):

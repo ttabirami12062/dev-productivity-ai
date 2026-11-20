@@ -24,6 +24,8 @@ from src.metrics import calculate_metrics, calculate_health_score, health_status
 from src.report_generator import generate_health_report
 from src.rag_pipeline import retrieve_history
 from src.observability import report_trace
+from src.citation_check import numbers_grounded
+from src.report_generator import team_data_text
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("api")
@@ -208,8 +210,15 @@ def analyze(body: AnalyzeRequest, request: Request):
             return _fail("Something went wrong on our side while writing the report. Please try again in a minute.")
 
         status = "quiet" if metrics["quiet"] else health_status(score)
+        # Free check on every report: each number the model wrote must come from its inputs.
+        grounded, unsupported = numbers_grounded(
+            report, team_data_text(activity["owner"], activity["repo"], metrics, score, signals),
+            *(f"{h['title']}\n{h['text']}" for h in history), *signals)
+        if not grounded:
+            log.warning("Report for %s used numbers not in its data: %s", key, unsupported)
         record(score=score, status=status, headline=report["headline"], signals=signals,
-               sources=[h["title"] for h in history], seconds=round(time.time() - started, 1))
+               sources=[h["title"] for h in history], seconds=round(time.time() - started, 1),
+               numbers_grounded=grounded, unsupported_numbers=unsupported)
 
     result = {
         "success": True,
@@ -224,6 +233,7 @@ def analyze(body: AnalyzeRequest, request: Request):
         "sources": [{"id": i, "title": h["title"], "match": h["match"]} for i, h in enumerate(history, start=1)],
         "generated_seconds": round(time.time() - started, 1),
         "usage": usage,
+        "checks": {"numbers_grounded": grounded, "unsupported_numbers": unsupported},
     }
     _cache[key] = (time.time(), result)
     return result

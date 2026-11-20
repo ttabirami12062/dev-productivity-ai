@@ -45,6 +45,9 @@ def report_trace(owner, repo, timezone):
                 span.update(output={"score": score, "status": status, "headline": headline, "error": error, **extra})
                 if score is not None:
                     langfuse.score_current_trace(name="health_score", value=score, comment=status)
+                if "numbers_grounded" in extra:
+                    langfuse.score_current_trace(name="numbers_grounded", value=1 if extra["numbers_grounded"] else 0,
+                                                 comment=", ".join(extra.get("unsupported_numbers") or []) or None)
             yield finish
 
 
