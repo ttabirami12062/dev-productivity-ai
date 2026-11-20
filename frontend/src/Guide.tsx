@@ -164,7 +164,7 @@ export default function Guide({ open, onClose, timeZone }: { open: boolean; onCl
           <Section title="What it can't see">
             <ul>
               <li>Only public projects, and only the last six weeks.</li>
-              <li>Very busy projects: up to 300 PRs and 300 commits, and reviews on the 40 most recently merged PRs.</li>
+              <li>Very busy projects: up to 300 PRs and 300 commits. Reviews are counted on every PR merged in the six weeks.</li>
               <li>Bots, the automatic accounts that update things, are left out.</li>
               <li>Some projects, like the Linux kernel, turn pull requests off and review by email. They're judged on commits only.</li>
             </ul>

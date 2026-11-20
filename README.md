@@ -39,7 +39,7 @@ flowchart LR
     F --> G[React dashboard]
 ```
 
-1. **Collect.** The FastAPI backend pulls six weeks of pull requests, commits and the reviews on recently merged PRs from the GitHub API, leaving out bots. The six weeks are aligned to the visitor's own time zone, so a PR merged at 7:30pm on October 11 in Oklahoma lands in the same week the visitor sees on GitHub.
+1. **Collect.** The FastAPI backend pulls six weeks of pull requests, their reviews and the commits in one to three GitHub GraphQL requests, leaving out bots. (The first version used the REST API and needed up to 45 requests, one per PR's reviews.) The six weeks are aligned to the visitor's own time zone, so a PR merged at 7:30pm on October 11 in Oklahoma lands in the same week the visitor sees on GitHub.
 2. **Measure.** It calculates the median time from opening a PR to merging it, week by week; how many PRs have been open for more than three days; and how concentrated reviews and commits are.
 3. **Score.** The score starts at 100 and loses points for each warning sign. Every deduction comes with a plain-language reason, so the score is never a black box.
 
@@ -76,6 +76,7 @@ A "How to read this" panel in the app explains every number, chart and label in 
 | One-hour cache, a per-visitor hourly limit and a site-wide daily cap | Keeps API costs predictable on a public demo. Langfuse measures a report at about $0.0025 |
 | Langfuse tracing, switched off when keys are absent | Latency, tokens and cost per step are visible in production, while CI and fresh checkouts run without it |
 | Exact library versions in `requirements.txt` | An unpinned dependency update is what originally broke the live site |
+| GitHub GraphQL instead of REST | One query returns PRs with their reviews; a busy repo went from 45 requests and 9.3s to 3 requests and 4.4s, with identical results |
 | Read-only GitHub token scoped to public repositories | The least access the job needs |
 | A scheduled health check every 10 minutes | Keeps the free Render server from sleeping, so visitors don't wait a minute for it to wake |
 
@@ -115,7 +116,7 @@ These are honest gaps, and the next things on the roadmap.
 
 - **The incident library is a sample.** It holds two example documents, an incident report and a sprint retrospective, about a fictional team. Every repository is compared with the same two, and the dashboard says so. Letting each team upload its own history is the next major feature.
 - **No stored history.** Each analysis covers six weeks fetched live, so there are no month-over-month trends yet.
-- **Sampling on busy repositories.** At most 300 PRs and 300 commits are read, and reviews are checked on the 40 most recently merged PRs.
+- **Sampling on busy repositories.** At most 300 PRs and 300 commits are read. Reviews are counted on every PR merged in the six weeks.
 - **Public repositories only.** Private repositories would need a GitHub App with read-only, per-repository access, plus login and per-company data separation.
 
 ## Roadmap

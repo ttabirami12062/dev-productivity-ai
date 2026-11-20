@@ -1,5 +1,4 @@
 import os
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -8,12 +7,42 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-API = "https://api.github.com"
+GRAPHQL = "https://api.github.com/graphql"
 # Six weeks gives a weekly trend while keeping one analysis to a few seconds.
 WINDOW_DAYS = 42
 MAX_PAGES = 3
-# Each PR's reviews are a separate request, so cap how many we look up.
-MAX_REVIEWED_PRS = 40
+
+# One query returns the repo details, a page of PRs with their reviews, and a page of
+# commits. The REST API needed a separate request per PR's reviews (45 requests for a
+# busy repo); this needs 1 to 3 in total.
+QUERY = """
+query($owner: String!, $name: String!, $since: GitTimestamp!,
+      $prCursor: String, $commitCursor: String, $withPrs: Boolean!, $withCommits: Boolean!) {
+  repository(owner: $owner, name: $name) {
+    name
+    owner { login }
+    isPrivate
+    pullRequests(first: 100, after: $prCursor, orderBy: {field: UPDATED_AT, direction: DESC}) @include(if: $withPrs) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        number state createdAt updatedAt mergedAt
+        author { __typename login }
+        reviews(first: 50) { nodes { author { __typename login } } }
+      }
+    }
+    defaultBranchRef {
+      target {
+        ... on Commit {
+          history(first: 100, after: $commitCursor, since: $since) @include(if: $withCommits) {
+            pageInfo { hasNextPage endCursor }
+            nodes { committedDate author { name user { login } } }
+          }
+        }
+      }
+    }
+  }
+}
+"""
 
 
 class GitHubError(Exception):
@@ -21,84 +50,71 @@ class GitHubError(Exception):
 
 
 def _headers():
-    headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+    headers = {"Accept": "application/vnd.github+json"}
     token = os.getenv("GITHUB_TOKEN")
-    # Sending "token None" makes GitHub reject even public repos, so only send a real token.
+    # GitHub's GraphQL API always needs a token; sending "token None" would be rejected anyway.
     if token:
         headers["Authorization"] = f"Bearer {token}"
     return headers
 
 
-def _get(path, params=None, missing_ok=False):
+def _query(variables):
     try:
-        response = requests.get(f"{API}{path}", headers=_headers(), params=params, timeout=15)
+        response = requests.post(GRAPHQL, json={"query": QUERY, "variables": variables}, headers=_headers(), timeout=30)
     except requests.RequestException:
         raise GitHubError("We couldn't reach GitHub. Please try again in a minute.")
 
-    if response.status_code == 404 and missing_ok:
-        return []
-    if response.status_code == 404:
-        raise GitHubError("We couldn't find that repository. Check the owner and name, and make sure it's public.")
-    if response.status_code in (403, 429) and response.headers.get("X-RateLimit-Remaining") == "0":
-        raise GitHubError("GitHub's hourly limit was reached. Please try again in a few minutes.")
-    if response.status_code == 409:
-        raise GitHubError("This repository is empty, so there's nothing to analyze yet.")
     if response.status_code == 401:
         raise RuntimeError("GITHUB_TOKEN was rejected by GitHub")
+    if response.status_code in (403, 429):
+        raise GitHubError("GitHub's hourly limit was reached. Please try again in a few minutes.")
     response.raise_for_status()
-    return response.json()
+
+    body = response.json()
+    for error in body.get("errors") or []:
+        if error.get("type") == "NOT_FOUND":
+            raise GitHubError("We couldn't find that repository. Check the owner and name, and make sure it's public.")
+        if error.get("type") == "RATE_LIMITED":
+            raise GitHubError("GitHub's hourly limit was reached. Please try again in a few minutes.")
+    if body.get("errors") and not (body.get("data") or {}).get("repository"):
+        raise RuntimeError(f"GitHub GraphQL error: {body['errors'][0].get('message')}")
+    return body["data"]["repository"]
 
 
-def _is_bot(user):
-    return bool(user) and (user.get("type") == "Bot" or user.get("login", "").endswith("[bot]"))
+def _is_bot(author):
+    login = (author or {}).get("login") or ""
+    return (author or {}).get("__typename") == "Bot" or login.endswith("[bot]")
 
 
 def _parse(ts):
     return datetime.fromisoformat(ts.replace("Z", "+00:00")) if ts else None
 
 
-def _recent_pull_requests(owner, repo, since):
-    # Sorted by last update, so we can stop paging once PRs are older than the window.
-    prs = []
-    for page in range(1, MAX_PAGES + 1):
-        # Some projects (the Linux kernel, for one) switch pull requests off, and GitHub
-        # answers 404 even though the repo exists; treat that as "no PRs".
-        batch = _get(f"/repos/{owner}/{repo}/pulls",
-                     {"state": "all", "sort": "updated", "direction": "desc", "per_page": 100, "page": page},
-                     missing_ok=True)
-        for pr in batch:
-            if _parse(pr["updated_at"]) < since:
-                return prs
-            if not _is_bot(pr.get("user")):
-                prs.append(pr)
-        if len(batch) < 100:
-            break
-    return prs
+def _as_pr(node):
+    # Same shape the REST API used, so metrics.py doesn't need to know where data came from.
+    author = node.get("author") or {}
+    return {
+        "number": node["number"],
+        "state": "open" if node["state"] == "OPEN" else "closed",
+        "created_at": node["createdAt"],
+        "updated_at": node["updatedAt"],
+        "merged_at": node["mergedAt"],
+        "user": {"login": author.get("login"), "type": author.get("__typename")} if author else None,
+    }
 
 
-def _recent_commits(owner, repo, since):
-    commits = []
-    for page in range(1, MAX_PAGES + 1):
-        batch = _get(f"/repos/{owner}/{repo}/commits",
-                     {"since": since.isoformat(), "per_page": 100, "page": page})
-        commits.extend(c for c in batch if not _is_bot(c.get("author")))
-        if len(batch) < 100:
-            break
-    return commits
+def _as_commit(node):
+    author = node.get("author") or {}
+    login = (author.get("user") or {}).get("login")
+    return {
+        "author": {"login": login} if login else None,
+        "commit": {"author": {"name": author.get("name") or "Unknown"}, "committer": {"date": node["committedDate"]}},
+    }
 
 
-def _reviews_for(owner, repo, prs):
-    reviewed = [pr for pr in prs if pr.get("merged_at")][:MAX_REVIEWED_PRS]
-
-    def fetch(pr):
-        try:
-            reviews = _get(f"/repos/{owner}/{repo}/pulls/{pr['number']}/reviews", {"per_page": 100})
-        except GitHubError:
-            reviews = []
-        return pr["number"], [r for r in reviews if r.get("user") and not _is_bot(r["user"])]
-
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        return dict(pool.map(fetch, reviewed))
+def _is_bot_commit(node):
+    author = node.get("author") or {}
+    return (author.get("name") or "").endswith("[bot]") or _is_bot(author.get("user"))
 
 
 def window_for(tz):
@@ -115,14 +131,48 @@ def window_for(tz):
 
 
 def fetch_repo_activity(owner, repo, tz=ZoneInfo("UTC")):
-    """Everything the metrics need for the last WINDOW_DAYS, in one call."""
-    info = _get(f"/repos/{owner}/{repo}")
-    if info.get("private"):
-        raise GitHubError("That repository is private. Only public repositories can be analyzed for now.")
-
+    """Everything the metrics need for the last WINDOW_DAYS."""
     since, until, window_end = window_for(tz)
-    prs = _recent_pull_requests(owner, repo, since)
-    commits = _recent_commits(owner, repo, since)
+    variables = {"owner": owner, "name": repo, "since": since.astimezone(timezone.utc).isoformat(),
+                 "prCursor": None, "commitCursor": None, "withPrs": True, "withCommits": True}
+
+    prs, reviews, commits, info = [], {}, [], None
+    prs_done = commits_done = False
+    for _ in range(MAX_PAGES):
+        data = _query(variables)
+        if info is None:
+            info = data
+            if data.get("isPrivate"):
+                raise GitHubError("That repository is private. Only public repositories can be analyzed for now.")
+
+        if not prs_done:
+            page = data.get("pullRequests") or {"nodes": [], "pageInfo": {"hasNextPage": False}}
+            for node in page["nodes"]:
+                # Sorted by last update, so everything after this is older than the window.
+                if _parse(node["updatedAt"]) < since:
+                    prs_done = True
+                    break
+                if _is_bot(node.get("author")):
+                    continue
+                prs.append(_as_pr(node))
+                # Review load counts only PRs merged inside the window, like the merge times do.
+                if node["mergedAt"] and _parse(node["mergedAt"]) >= since:
+                    reviews[node["number"]] = [{"user": {"login": r["author"]["login"]}}
+                                               for r in node["reviews"]["nodes"] if r.get("author") and not _is_bot(r["author"])]
+            prs_done = prs_done or not page["pageInfo"]["hasNextPage"]
+            variables["prCursor"] = page["pageInfo"].get("endCursor")
+
+        if not commits_done:
+            target = (data.get("defaultBranchRef") or {}).get("target") or {}
+            history = target.get("history") or {"nodes": [], "pageInfo": {"hasNextPage": False}}
+            commits += [_as_commit(n) for n in history["nodes"] if not _is_bot_commit(n)]
+            commits_done = not history["pageInfo"]["hasNextPage"]
+            variables["commitCursor"] = history["pageInfo"].get("endCursor")
+
+        if prs_done and commits_done:
+            break
+        variables["withPrs"], variables["withCommits"] = not prs_done, not commits_done
+
     if not prs and not commits:
         raise GitHubError("There were no pull requests or commits in the last six weeks, so there's nothing to analyze yet.")
 
@@ -135,11 +185,11 @@ def fetch_repo_activity(owner, repo, tz=ZoneInfo("UTC")):
         "tz": tz,
         "pull_requests": prs,
         "commits": commits,
-        "reviews": _reviews_for(owner, repo, prs),
+        "reviews": reviews,
     }
 
 
 if __name__ == "__main__":
-    activity = fetch_repo_activity("ttabirami12062", "IPMS")
+    activity = fetch_repo_activity("tailwindlabs", "tailwindcss")
     print(f"{len(activity['pull_requests'])} PRs, {len(activity['commits'])} commits, "
           f"{sum(len(r) for r in activity['reviews'].values())} reviews since {activity['since']:%b %d}")
