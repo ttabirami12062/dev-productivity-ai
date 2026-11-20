@@ -205,7 +205,13 @@ export default function Dashboard({ data }: { data: Analysis }) {
 
       <div className="footnote">
         <span>Generated in {data.generated_seconds}s{data.cached ? ', from a report made in the last hour' : ''}.</span>
-        <span>Score: start at 100, lose points for each warning sign.</span>
+        <span>
+          {data.checks?.numbers_grounded
+            ? 'Every number in this report was checked against the GitHub data and sources.'
+            : data.checks
+              ? `${data.checks.unsupported_numbers.length} number(s) in this report couldn't be traced to the data: ${data.checks.unsupported_numbers.join(', ')}.`
+              : 'Score: start at 100, lose points for each warning sign.'}
+        </span>
       </div>
     </>
   );

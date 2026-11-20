@@ -54,7 +54,7 @@ flowchart LR
    Solo projects aren't penalized for having one person do everything. Projects with very little activity are labelled "too little activity" instead of getting a misleading score, and projects that switch pull requests off, like the Linux kernel, are judged on commits alone.
 4. **Retrieve.** The warning signs are embedded and searched against a Pinecone index of past incident reports and sprint retrospectives. Each match comes back with a similarity score that's shown to the user.
 5. **Generate.** The metrics, the reasons and the retrieved documents go to `gpt-5.4-mini`, which returns JSON: a headline, up to two risks, up to two actions and one thing going well, each citing numbered sources. The model is told to use only the numbers it's given.
-6. **Validate.** The response is checked against the expected shape, and any citation pointing to a source that wasn't provided is removed before it reaches the page.
+6. **Validate.** The response is checked against the expected shape, and any citation pointing to a source that wasn't provided is removed. Every number in the report is then checked against the data and documents the model was given, so an invented or miscalculated figure is flagged on the page and in Langfuse.
 7. **Trace.** Every analysis is recorded in Langfuse as one trace: the history search, the embedding call and the report generation, each with its latency, token counts and cost, plus the final health score.
 
 A "How to read this" panel in the app explains every number, chart and label in plain language. The layout also works on phones.
@@ -86,7 +86,10 @@ A "How to read this" panel in the app explains every number, chart and label in 
 Every push runs two checks in GitHub Actions:
 
 - **Scoring tests** (`tests/test_metrics.py`) check the health score math on hand-built data with no API calls: solo projects, overloaded reviewers, duplicate reviews, quiet repositories and repositories without pull requests.
-- **Report evaluation** (`tests/test_evaluation.py`) generates reports for a golden dataset of team scenarios and checks that each has a headline and the required finding types, raises no risks for a healthy team, cites only sources that exist, and mentions the key topic. The build fails below an 80% pass rate.
+- **Number detector tests** (`tests/test_citation_check.py`) confirm the number check passes real figures and catches invented ones (a made-up "57%") and miscalculated ones ("6.1 days").
+- **Report evaluation** (`tests/test_evaluation.py`) generates reports for a golden dataset of team scenarios and checks that each has a headline and the required finding types, raises no risks for a healthy team, cites only sources that exist, uses only numbers found in its inputs, and mentions the key topic. A second model then acts as a judge, reading each finding next to the sources it cites and deciding whether they support it. The build fails if fewer than 80% of reports pass or fewer than 90% of cited findings are supported.
+
+  Adding the judge immediately caught real problems: a "risk" raised for a healthy team, and an action citing an old incident for a claim about the team's current numbers. Both were fixed in the prompt, and two consecutive runs then passed with 10 of 10 citations supported.
 
 Before going live, the pipeline was also tested against twelve real projects, including `microsoft/vscode`, `facebook/react`, `django/django`, `torvalds/linux` and an archived repository. That testing found and fixed two bugs: repositories without pull requests were reported as missing, and nearly empty repositories scored a perfect 100.
 
@@ -121,7 +124,7 @@ These are honest gaps, and the next things on the roadmap.
 - [ ] Store weekly snapshots in Postgres, collected by a nightly job, for long-term trends
 - [ ] More signals: cycle time from first commit, time to first review, code churn, files with repeated bug fixes, after-hours work in each contributor's time zone
 - [x] Langfuse tracing for latency, tokens and cost per report
-- [ ] A second model that checks each cited source actually supports the claim
+- [x] A second model that checks each cited source actually supports the claim (in CI), plus a number check on every live report
 - [ ] A weekly email report for managers
 
 ---
@@ -161,7 +164,8 @@ dev-productivity-ai/
 │   ├── github_client.py      # Fetches six weeks of PRs, commits and reviews
 │   ├── metrics.py            # Metrics, health score and the reason for each deduction
 │   ├── rag_pipeline.py       # Builds and searches the Pinecone index
-│   ├── report_generator.py   # Prompt, JSON report and citation checks
+│   ├── report_generator.py   # Prompt and JSON report
+│   ├── citation_check.py     # Number check (live) and citation judge (CI)
 │   └── observability.py      # Langfuse tracing (off when keys are missing)
 ├── documents/                # Sample incident report and retrospective
 ├── tests/                    # Scoring tests, golden dataset and report evaluation

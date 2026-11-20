@@ -135,6 +135,10 @@ export default function Guide({ open, onClose, timeZone }: { open: boolean; onCl
               The small numbered tags show where each claim came from. Tap one to jump to it in Sources. The last source is always the GitHub activity
               itself.
             </p>
+            <p>
+              Every number the AI writes is checked against the data it was given, and the note at the bottom of the report says whether they all
+              matched. Separately, the project's automated tests use a second AI to confirm each cited source really supports its claim.
+            </p>
           </Section>
 
           <Section title="Sources and match %">
