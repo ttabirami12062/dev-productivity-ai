@@ -4,10 +4,12 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 
+from src.metrics import duration
+
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env'))
 
 # Read from the environment so a retired model can be swapped on Render without a code change.
-MODEL = os.getenv("OPENAI_MODEL") or "gpt-4o-mini"
+MODEL = os.getenv("OPENAI_MODEL") or "gpt-5.4-mini"
 KINDS = ("risk", "action", "positive")
 
 SYSTEM = """You write weekly team health reports for engineering managers.
@@ -17,6 +19,7 @@ Rules:
   Cite the GitHub data as source 0. Never cite a number that isn't listed.
 - If HISTORY doesn't fit this team's situation, don't force it in.
 - Plain, direct sentences. No filler, no generic advice, no emojis.
+- Write waits of 48 hours or more in days (say "30 days", not "726 hours").
 Reply with JSON only."""
 
 SHAPE = """{
@@ -41,7 +44,7 @@ People active: {metrics['people']}{' (solo project, so workload balance does not
 Health score: {score}/100
 What lowered the score: {' '.join(signals) if signals else 'nothing'}
 PRs: {prs['total']} active, {prs['merged']} merged, {prs['open']} open ({prs['stale_open']} open over 3 days), {prs['closed_unmerged']} closed without merging
-Median hours from open to merge: {prs['median_merge_hours']}
+Median time from open to merge: {prs['median_merge_hours']} hours{f" (about {duration(prs['median_merge_hours'])})" if prs['median_merge_hours'] and prs['median_merge_hours'] >= 48 else ''}
 Median merge hours by week: {weekly}
 Reviews: {reviews['total']} on {reviews['reviewed_prs']} merged PRs; by person: {reviews['per_reviewer'] or 'none'}
 Commits: {commits['total']}; by person: {commits['per_author']}"""
@@ -76,12 +79,18 @@ def _clean(report, max_source):
 def generate_health_report(owner, repo, metrics, score, signals, history):
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
     prompt = f"TEAM DATA\n{_team_data(owner, repo, metrics, score, signals)}\n\nHISTORY\n{_history_block(history)}\n\nReply in this JSON shape:\n{SHAPE}"
+    options = {}
+    # Reasoning models (gpt-5 family, o-series) reject temperature; low effort keeps them fast.
+    if MODEL.startswith(("gpt-5", "o")):
+        options["reasoning_effort"] = "low"
+    else:
+        options["temperature"] = 0.3
     response = client.chat.completions.create(
         model=MODEL,
         messages=[{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}],
         response_format={"type": "json_object"},
-        temperature=0.3,
-        max_tokens=900,
+        max_completion_tokens=1500,
+        **options,
     )
     report = _clean(json.loads(response.choices[0].message.content), max_source=len(history))
     usage = response.usage

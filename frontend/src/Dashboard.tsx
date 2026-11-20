@@ -10,6 +10,8 @@ const KIND_LABEL: Record<FindingKind, string> = { risk: 'Risk', action: 'Do this
 
 const fmtDate = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+// Long waits read better in days: 726 hours is "30 days".
+const wait = (h: number) => (h < 48 ? { value: `${h}`, unit: 'h' } : { value: `${h / 24 < 10 ? (h / 24).toFixed(1).replace('.0', '') : Math.round(h / 24)}`, unit: ' days' });
 
 function Headline({ text, highlight }: { text: string; highlight: string }) {
   const at = highlight ? text.indexOf(highlight) : -1;
@@ -62,8 +64,8 @@ export default function Dashboard({ data }: { data: Analysis }) {
         <div className="vital">
           <div className="vital-label">Time to merge</div>
           <div className="vital-value">
-            {m.prs.median_merge_hours ?? 'None'}
-            {m.prs.median_merge_hours !== null && <span>h</span>}
+            {m.prs.median_merge_hours === null ? 'None' : wait(m.prs.median_merge_hours).value}
+            {m.prs.median_merge_hours !== null && <span>{wait(m.prs.median_merge_hours).unit}</span>}
           </div>
           <div className="vital-foot">
             <span className={mergeChange && mergeChange > 0 ? 'up-bad' : 'flat'}>

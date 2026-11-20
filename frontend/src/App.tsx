@@ -5,7 +5,7 @@ import Dashboard from './Dashboard';
 import Feedback from './Feedback';
 import { Analysis } from './types';
 
-const EXAMPLES = ['vercel/swr', 'pallets/flask', 'ttabirami12062/IPMS'];
+const EXAMPLES = ['vercel/swr', 'pallets/flask', 'fastapi/fastapi'];
 
 function Loading({ seconds }: { seconds: number }) {
   return (

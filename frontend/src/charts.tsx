@@ -51,7 +51,8 @@ export function Pulse({ score, status }: { score: number; status: Status }) {
 export function MergeChart({ weeks, target }: { weeks: Week[]; target: number }) {
   const W = 520, H = 220, L = 38, R = 10, T = 16, B = 28;
   const highest = Math.max(target, ...weeks.map((w) => w.median_hours ?? 0));
-  const step = highest > 100 ? 50 : highest > 40 ? 20 : 10;
+  // Pick a round step that gives at most about six grid lines, even for month-long waits.
+  const step = [10, 20, 50, 100, 200, 500, 1000].find((st) => (highest * 1.1) / st <= 6) ?? 2000;
   const max = Math.ceil((highest * 1.1) / step) * step;
   const y = (v: number) => T + (H - T - B) * (1 - v / max);
   const bw = (W - L - R) / weeks.length;

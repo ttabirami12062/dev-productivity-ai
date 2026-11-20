@@ -8,6 +8,14 @@ REVIEW_SHARE_LIMIT = 50
 STALE_OPEN_HOURS = 72
 
 
+def duration(hours):
+    """Plain wording for a wait: '9 hours', '2.5 days', '30 days'."""
+    if hours < 48:
+        return f"{hours:g} hours"
+    days = hours / 24
+    return f"{days:.1f} days".replace(".0 days", " days") if days < 10 else f"{round(days)} days"
+
+
 def _parse(ts):
     return datetime.fromisoformat(ts.replace("Z", "+00:00")) if ts else None
 
@@ -107,17 +115,20 @@ def calculate_health_score(metrics):
     prs, reviews, commits = metrics["prs"], metrics["reviews"], metrics["commits"]
 
     merge = prs["median_merge_hours"]
-    if merge is not None and merge > 2 * MERGE_TARGET_HOURS:
+    if merge is not None and merge > 7 * 24:
+        score -= 35
+        signals.append(f"PRs take {duration(merge)} to merge, far over the {MERGE_TARGET_HOURS}-hour target.")
+    elif merge is not None and merge > 2 * MERGE_TARGET_HOURS:
         score -= 25
-        signals.append(f"PRs take {merge:g} hours to merge, more than twice the {MERGE_TARGET_HOURS}-hour target.")
+        signals.append(f"PRs take {duration(merge)} to merge, more than twice the {MERGE_TARGET_HOURS}-hour target.")
     elif merge is not None and merge > MERGE_TARGET_HOURS:
         score -= 12
-        signals.append(f"PRs take {merge:g} hours to merge, over the {MERGE_TARGET_HOURS}-hour target.")
+        signals.append(f"PRs take {duration(merge)} to merge, over the {MERGE_TARGET_HOURS}-hour target.")
 
     weeks = [w["median_hours"] for w in prs["weekly"] if w["median_hours"] is not None]
     if len(weeks) >= 3 and weeks[-1] > MERGE_TARGET_HOURS and weeks[-1] >= 2 * weeks[0]:
         score -= 10
-        signals.append(f"Merge time has climbed from {weeks[0]:g} to {weeks[-1]:g} hours over the last few weeks.")
+        signals.append(f"Merge time has climbed from {duration(weeks[0])} to {duration(weeks[-1])} over the last few weeks.")
 
     if prs["stale_open"] >= 5:
         score -= 15
