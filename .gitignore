@@ -5,3 +5,4 @@ __pycache__/
 .pytest_cache/
 # feedback holds visitors names and emails, never commit it
 reviews.json
+.venv/
