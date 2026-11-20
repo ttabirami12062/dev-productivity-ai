@@ -1,9 +1,18 @@
-import React from 'react';
 import { render, screen } from '@testing-library/react';
 import App from './App';
+import { parseRepo } from './api';
 
-test('renders learn react link', () => {
+jest.mock('axios', () => ({ post: jest.fn() }));
+
+test('shows the intro and example repositories before any analysis', () => {
   render(<App />);
-  const linkElement = screen.getByText(/learn react/i);
-  expect(linkElement).toBeInTheDocument();
+  expect(screen.getByText(/weeks before a deadline slips/i)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'vercel/swr' })).toBeInTheDocument();
+});
+
+test('understands repository names and links', () => {
+  expect(parseRepo('vercel/swr')).toEqual({ owner: 'vercel', repo: 'swr' });
+  expect(parseRepo('https://github.com/vercel/swr.git')).toEqual({ owner: 'vercel', repo: 'swr' });
+  expect(parseRepo('github.com/vercel/swr/')).toEqual({ owner: 'vercel', repo: 'swr' });
+  expect(parseRepo('just-one-word')).toBeNull();
 });
