@@ -37,7 +37,8 @@ Give up to 2 risks, up to 2 actions and exactly 1 positive. A healthy team may h
 
 def _team_data(owner, repo, metrics, score, signals):
     prs, reviews, commits = metrics["prs"], metrics["reviews"], metrics["commits"]
-    weekly = ", ".join(f"{w['label']}: {w['median_hours'] if w['median_hours'] is not None else 'no merges'}"
+    # Pre-written as "7.4 hours" / "5.3 days" so the model copies readable values.
+    weekly = ", ".join(f"{w['label']}: {duration(w['median_hours']) if w['median_hours'] is not None else 'no merges'}"
                        for w in prs["weekly"])
     return f"""Repository: {owner}/{repo}, last {metrics['window']['days']} days ({metrics['window']['since']} to {metrics['window']['until']}, dates in {metrics['window'].get('timezone', 'UTC')})
 People active: {metrics['people']}{' (solo project, so workload balance does not apply)' if metrics['solo'] else ''}
@@ -47,7 +48,7 @@ Health score: {score}/100
 What lowered the score: {' '.join(signals) if signals else 'nothing'}
 PRs: {prs['total']} active, {prs['merged']} merged, {prs['open']} open ({prs['stale_open']} open over 3 days), {prs['closed_unmerged']} closed without merging
 Median time from open to merge: {prs['median_merge_hours']} hours{f" (about {duration(prs['median_merge_hours'])})" if prs['median_merge_hours'] and prs['median_merge_hours'] >= 48 else ''}
-Median merge hours by week: {weekly}
+Median wait to merge, by week: {weekly}
 Reviews: {reviews['total']} on {reviews['reviewed_prs']} merged PRs; by person: {reviews['per_reviewer'] or 'none'}
 Commits: {commits['total']}; by person: {commits['per_author']}"""
 

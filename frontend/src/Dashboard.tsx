@@ -75,16 +75,19 @@ export default function Dashboard({ data }: { data: Analysis }) {
 
       <section className="vitals" aria-label="Vital signs">
         <div className="vital">
-          <div className="vital-label">Time to merge</div>
+          <div className="vital-label">Time to merge, six-week median</div>
           <div className="vital-value">
             {m.prs.median_merge_hours === null ? 'None' : wait(m.prs.median_merge_hours).value}
             {m.prs.median_merge_hours !== null && <span>{wait(m.prs.median_merge_hours).unit}</span>}
           </div>
           <div className="vital-foot">
             <span className={mergeChange && mergeChange > 0 ? 'up-bad' : 'flat'}>
-              {mergeChange === null ? 'median, open to merge' : `${mergeChange > 0 ? '+' : ''}${mergeChange}h in ${weekly.length} wks`}
+              {mergeChange === null
+                ? 'six-week median'
+                : `${mergeChange > 0 ? '+' : '-'}${wait(Math.abs(mergeChange)).value}${wait(Math.abs(mergeChange)).unit} in ${weekly.length} wks`}
             </span>
-            <Sparkline values={weekly} color={(m.prs.median_merge_hours ?? 0) > MERGE_TARGET ? COLORS.bad : COLORS.good} />
+            {/* Colored by the latest week, so a worsening trend never shows green. */}
+            <Sparkline values={weekly} color={(weekly[weekly.length - 1] ?? 0) > MERGE_TARGET ? COLORS.bad : COLORS.good} />
           </div>
         </div>
         <div className="vital">
