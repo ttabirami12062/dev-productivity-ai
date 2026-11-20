@@ -6,6 +6,7 @@ import time
 import logging
 import smtplib
 import threading
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from html import escape
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -103,6 +104,16 @@ def send_email(review):
 class AnalyzeRequest(BaseModel):
     owner: str = Field(max_length=100)
     repo: str = Field(max_length=100)
+    # The visitor's time zone from their browser, e.g. "America/Chicago", so weeks
+    # and dates match what they see on GitHub.
+    timezone: str = Field("UTC", max_length=64)
+
+
+def _zone(name):
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError):
+        return ZoneInfo("UTC")
 
 class ReviewRequest(BaseModel):
     owner: str = Field(max_length=100)
@@ -142,7 +153,8 @@ def analyze(body: AnalyzeRequest, request: Request):
     if not (NAME.match(owner) and NAME.match(repo)):
         return _fail("That doesn't look like a GitHub repository. Use the form owner/name, for example vercel/swr.")
 
-    key = f"{owner}/{repo}".lower()
+    tz = _zone(body.timezone)
+    key = f"{owner}/{repo}@{tz}".lower()
     cached = _cache.get(key)
     if cached and time.time() - cached[0] < CACHE_SECONDS:
         return {**cached[1], "cached": True}
@@ -152,7 +164,7 @@ def analyze(body: AnalyzeRequest, request: Request):
 
     started = time.time()
     try:
-        activity = fetch_repo_activity(owner, repo)
+        activity = fetch_repo_activity(owner, repo, tz)
         metrics = calculate_metrics(activity)
         score, signals = calculate_health_score(metrics)
 

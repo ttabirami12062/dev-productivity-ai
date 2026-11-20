@@ -37,10 +37,12 @@ def _share(counts):
     return top, round(counts[top] / total * 100)
 
 
-def _weekly_merge_hours(merged, until, weeks=6):
+def _weekly_merge_hours(merged, window_end, weeks=6):
+    # window_end is midnight tonight in the viewer's time zone, so every week runs
+    # from one of their midnights to another and the labels are their calendar days.
     buckets = []
     for i in range(weeks, 0, -1):
-        start, end = until - timedelta(days=7 * i), until - timedelta(days=7 * (i - 1))
+        start, end = window_end - timedelta(days=7 * i), window_end - timedelta(days=7 * (i - 1))
         hours = [h for at, h in merged if start <= at < end]
         last = end - timedelta(days=1)
         # A range, not just the start date: "Oct 9" alone reads as a single day.
@@ -56,6 +58,8 @@ def _weekly_merge_hours(merged, until, weeks=6):
 
 def calculate_metrics(activity):
     since, until = activity["since"], activity["until"]
+    window_end = activity.get("window_end", until)
+    tz = activity.get("tz", timezone.utc)
     prs = activity["pull_requests"]
 
     # Time from opening a PR to merging it, for PRs merged inside the window.
@@ -86,7 +90,12 @@ def calculate_metrics(activity):
     people = set(commit_counts) | set(review_counts) | {pr["user"]["login"] for pr in prs if pr.get("user")}
 
     return {
-        "window": {"since": since.date().isoformat(), "until": until.date().isoformat(), "days": (until - since).days},
+        "window": {
+            "since": since.astimezone(tz).date().isoformat(),
+            "until": until.astimezone(tz).date().isoformat(),
+            "days": round((window_end - since).total_seconds() / 86400),
+            "timezone": str(tz),
+        },
         "people": len(people),
         "solo": len(people) <= 1,
         "quiet": len(merged) + len(activity["commits"]) < QUIET_ACTIVITY,
@@ -98,7 +107,7 @@ def calculate_metrics(activity):
             "stale_open": len(stale),
             "closed_unmerged": len(closed_unmerged),
             "median_merge_hours": round(median(merge_hours), 1) if merge_hours else None,
-            "weekly": _weekly_merge_hours(merged, until),
+            "weekly": _weekly_merge_hours(merged, window_end),
         },
         "reviews": {
             "total": sum(review_counts.values()),

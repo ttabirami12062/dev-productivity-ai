@@ -1,6 +1,7 @@
 import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import requests
 from dotenv import load_dotenv
@@ -100,14 +101,26 @@ def _reviews_for(owner, repo, prs):
         return dict(pool.map(fetch, reviewed))
 
 
-def fetch_repo_activity(owner, repo):
+def window_for(tz):
+    """The last WINDOW_DAYS ending at midnight tonight in the viewer's time zone.
+
+    Lining the window up with the viewer's midnights means a PR merged at 7:37pm on
+    Oct 11 their time lands in the same week they'd expect from GitHub, not the
+    next one because it was already Oct 12 in UTC.
+    """
+    now = datetime.now(timezone.utc)
+    local_now = now.astimezone(tz)
+    tonight = datetime.combine(local_now.date() + timedelta(days=1), datetime.min.time(), tzinfo=tz)
+    return tonight - timedelta(days=WINDOW_DAYS), now, tonight
+
+
+def fetch_repo_activity(owner, repo, tz=ZoneInfo("UTC")):
     """Everything the metrics need for the last WINDOW_DAYS, in one call."""
     info = _get(f"/repos/{owner}/{repo}")
     if info.get("private"):
         raise GitHubError("That repository is private. Only public repositories can be analyzed for now.")
 
-    until = datetime.now(timezone.utc)
-    since = until - timedelta(days=WINDOW_DAYS)
+    since, until, window_end = window_for(tz)
     prs = _recent_pull_requests(owner, repo, since)
     commits = _recent_commits(owner, repo, since)
     if not prs and not commits:
@@ -118,6 +131,8 @@ def fetch_repo_activity(owner, repo):
         "repo": info["name"],
         "since": since,
         "until": until,
+        "window_end": window_end,
+        "tz": tz,
         "pull_requests": prs,
         "commits": commits,
         "reviews": _reviews_for(owner, repo, prs),
