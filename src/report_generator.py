@@ -1,51 +1,94 @@
+import json
 import os
-from openai import OpenAI
+
 from dotenv import load_dotenv
+from openai import OpenAI
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env'))
 
-def generate_health_report(pr_metrics, commit_metrics, health_score, rag_context=""):
+# Read from the environment so a retired model can be swapped on Render without a code change.
+MODEL = os.getenv("OPENAI_MODEL") or "gpt-4o-mini"
+KINDS = ("risk", "action", "positive")
+
+SYSTEM = """You write weekly team health reports for engineering managers.
+Rules:
+- Use only the numbers in TEAM DATA. Never invent numbers, names or dates.
+- HISTORY entries are numbered. When a sentence relies on one, cite it as its number in "sources".
+  Cite the GitHub data as source 0. Never cite a number that isn't listed.
+- If HISTORY doesn't fit this team's situation, don't force it in.
+- Plain, direct sentences. No filler, no generic advice, no emojis.
+Reply with JSON only."""
+
+SHAPE = """{
+  "headline": "one sentence, at most 14 words, the single most important thing this week",
+  "highlight": "the key phrase from the headline, copied exactly (a few words)",
+  "summary": "two sentences explaining the headline with the most important numbers",
+  "findings": [
+    {"kind": "risk", "title": "short title", "detail": "1-2 sentences", "sources": [0]},
+    {"kind": "action", "title": "a concrete step for this week", "detail": "1-2 sentences", "sources": [1]},
+    {"kind": "positive", "title": "something going well", "detail": "1 sentence", "sources": [0]}
+  ]
+}
+Give up to 2 risks, up to 2 actions and exactly 1 positive. A healthy team may have 0 risks."""
+
+
+def _team_data(owner, repo, metrics, score, signals):
+    prs, reviews, commits = metrics["prs"], metrics["reviews"], metrics["commits"]
+    weekly = ", ".join(f"{w['label']}: {w['median_hours'] if w['median_hours'] is not None else 'no merges'}"
+                       for w in prs["weekly"])
+    return f"""Repository: {owner}/{repo}, last {metrics['window']['days']} days ({metrics['window']['since']} to {metrics['window']['until']})
+People active: {metrics['people']}{' (solo project, so workload balance does not apply)' if metrics['solo'] else ''}
+Health score: {score}/100
+What lowered the score: {' '.join(signals) if signals else 'nothing'}
+PRs: {prs['total']} active, {prs['merged']} merged, {prs['open']} open ({prs['stale_open']} open over 3 days), {prs['closed_unmerged']} closed without merging
+Median hours from open to merge: {prs['median_merge_hours']}
+Median merge hours by week: {weekly}
+Reviews: {reviews['total']} on {reviews['reviewed_prs']} merged PRs; by person: {reviews['per_reviewer'] or 'none'}
+Commits: {commits['total']}; by person: {commits['per_author']}"""
+
+
+def _history_block(history):
+    if not history:
+        return "No history available."
+    return "\n\n".join(f"[{i}] {h['title']}\n{h['text']}" for i, h in enumerate(history, start=1))
+
+
+def _clean(report, max_source):
+    """Keeps the model's reply to the shape the dashboard expects, whatever it sent."""
+    findings = []
+    for f in report.get("findings", []):
+        kind = f.get("kind")
+        if kind not in KINDS or not f.get("title"):
+            continue
+        sources = sorted({s for s in f.get("sources", []) if isinstance(s, int) and 0 <= s <= max_source})
+        findings.append({"kind": kind, "title": str(f["title"]), "detail": str(f.get("detail", "")), "sources": sources})
+    findings.sort(key=lambda f: KINDS.index(f["kind"]))
+    headline = str(report.get("headline", "")).strip()
+    highlight = str(report.get("highlight", "")).strip()
+    return {
+        "headline": headline,
+        "highlight": highlight if highlight and highlight in headline else "",
+        "summary": str(report.get("summary", "")).strip(),
+        "findings": findings,
+    }
+
+
+def generate_health_report(owner, repo, metrics, score, signals, history):
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-
-    prompt = f"""
-You are an AI assistant that analyzes software engineering team health data and generates actionable reports for engineering managers.
-
-Here is the current team data:
-
-PR METRICS:
-- Total PRs: {pr_metrics.get('total_prs')}
-- Merged PRs: {pr_metrics.get('merged_prs')}
-- Open PRs: {pr_metrics.get('open_prs')}
-- Average Review Time: {pr_metrics.get('avg_review_time_hours')} hours
-
-COMMIT METRICS:
-- Total Commits: {commit_metrics.get('total_commits')}
-- Commits Per Author: {commit_metrics.get('commits_per_author')}
-- Most Active Author: {commit_metrics.get('most_active_author')}
-
-TEAM HEALTH SCORE: {health_score}/100
-
-HISTORICAL CONTEXT FROM PAST INCIDENTS:
-{rag_context if rag_context else "No historical context available."}
-
-Generate a clear and concise weekly team health report with:
-1. Overall health summary in 2 sentences
-2. Top 2 risks or warning signs
-3. Top 2 specific actionable recommendations based on historical context
-4. One positive observation about the team
-
-If historical context is available, reference it specifically in your recommendations.
-Keep the tone professional but direct. No generic advice.
-"""
-
+    prompt = f"TEAM DATA\n{_team_data(owner, repo, metrics, score, signals)}\n\nHISTORY\n{_history_block(history)}\n\nReply in this JSON shape:\n{SHAPE}"
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "You are an expert engineering team health analyst."},
-            {"role": "user", "content": prompt}
-        ],
-        max_tokens=600,
-        temperature=0.7
+        model=MODEL,
+        messages=[{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}],
+        response_format={"type": "json_object"},
+        temperature=0.3,
+        max_tokens=900,
     )
+    report = _clean(json.loads(response.choices[0].message.content), max_source=len(history))
+    usage = response.usage
+    return report, {"model": MODEL, "input_tokens": usage.prompt_tokens, "output_tokens": usage.completion_tokens}
 
-    return response.choices[0].message.content
+
+def report_as_text(report):
+    """Flat text version, used by the evaluation tests."""
+    parts = [report["headline"], report["summary"]] + [f"{f['title']}. {f['detail']}" for f in report["findings"]]
+    return "\n".join(p for p in parts if p)

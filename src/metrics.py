@@ -1,83 +1,149 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from statistics import median
 
-def calculate_pr_metrics(pull_requests):
-    if not pull_requests or not isinstance(pull_requests, list):
-        return {}
+# Thresholds a reviewer can reason about. They match the sample incident report
+# (merge within 24h, nobody over 50% of reviews), so the report can cite them.
+MERGE_TARGET_HOURS = 24
+REVIEW_SHARE_LIMIT = 50
+STALE_OPEN_HOURS = 72
 
-    total_prs = len(pull_requests)
-    merged_prs = [pr for pr in pull_requests if pr.get("merged_at")]
-    open_prs = [pr for pr in pull_requests if pr.get("state") == "open"]
 
-    review_times = []
-    for pr in merged_prs:
-        created = datetime.fromisoformat(pr["created_at"].replace("Z", "+00:00"))
-        merged = datetime.fromisoformat(pr["merged_at"].replace("Z", "+00:00"))
-        hours = (merged - created).total_seconds() / 3600
-        review_times.append(hours)
+def _parse(ts):
+    return datetime.fromisoformat(ts.replace("Z", "+00:00")) if ts else None
 
-    avg_review_time = round(sum(review_times) / len(review_times), 2) if review_times else 0
+
+def _person(commit):
+    # Prefer the GitHub login so one person with two git names counts once.
+    if commit.get("author") and commit["author"].get("login"):
+        return commit["author"]["login"]
+    return commit.get("commit", {}).get("author", {}).get("name", "Unknown")
+
+
+def _share(counts):
+    total = sum(counts.values())
+    if not total:
+        return None, 0
+    top = max(counts, key=counts.get)
+    return top, round(counts[top] / total * 100)
+
+
+def _weekly_merge_hours(merged, until, weeks=6):
+    buckets = []
+    for i in range(weeks, 0, -1):
+        start, end = until - timedelta(days=7 * i), until - timedelta(days=7 * (i - 1))
+        hours = [h for at, h in merged if start <= at < end]
+        buckets.append({
+            "week_start": start.date().isoformat(),
+            "label": f"{start:%b} {start.day}",
+            "merged": len(hours),
+            "median_hours": round(median(hours), 1) if hours else None,
+        })
+    return buckets
+
+
+def calculate_metrics(activity):
+    since, until = activity["since"], activity["until"]
+    prs = activity["pull_requests"]
+
+    # Time from opening a PR to merging it, for PRs merged inside the window.
+    merged = []
+    for pr in prs:
+        merged_at = _parse(pr.get("merged_at"))
+        if merged_at and merged_at >= since:
+            merged.append((merged_at, (merged_at - _parse(pr["created_at"])).total_seconds() / 3600))
+    merge_hours = [h for _, h in merged]
+
+    open_prs = [pr for pr in prs if pr["state"] == "open"]
+    stale = [pr for pr in open_prs if (until - _parse(pr["created_at"])).total_seconds() / 3600 > STALE_OPEN_HOURS]
+    closed_unmerged = [pr for pr in prs if pr["state"] == "closed" and not pr.get("merged_at")]
+
+    review_counts = {}
+    for reviews in activity["reviews"].values():
+        # One person approving and commenting on the same PR counts as one review of it.
+        for login in {r["user"]["login"] for r in reviews}:
+            review_counts[login] = review_counts.get(login, 0) + 1
+    top_reviewer, top_review_share = _share(review_counts)
+
+    commit_counts = {}
+    for commit in activity["commits"]:
+        person = _person(commit)
+        commit_counts[person] = commit_counts.get(person, 0) + 1
+    top_author, top_commit_share = _share(commit_counts)
+
+    people = set(commit_counts) | set(review_counts) | {pr["user"]["login"] for pr in prs if pr.get("user")}
 
     return {
-        "total_prs": total_prs,
-        "merged_prs": len(merged_prs),
-        "open_prs": len(open_prs),
-        "avg_review_time_hours": avg_review_time
+        "window": {"since": since.date().isoformat(), "until": until.date().isoformat(), "days": (until - since).days},
+        "people": len(people),
+        "solo": len(people) <= 1,
+        "prs": {
+            "total": len(prs),
+            "merged": len(merged),
+            "open": len(open_prs),
+            "stale_open": len(stale),
+            "closed_unmerged": len(closed_unmerged),
+            "median_merge_hours": round(median(merge_hours), 1) if merge_hours else None,
+            "weekly": _weekly_merge_hours(merged, until),
+        },
+        "reviews": {
+            "total": sum(review_counts.values()),
+            "reviewed_prs": len(activity["reviews"]),
+            "per_reviewer": dict(sorted(review_counts.items(), key=lambda kv: -kv[1])),
+            "top_reviewer": top_reviewer,
+            "top_share": top_review_share,
+        },
+        "commits": {
+            "total": len(activity["commits"]),
+            "per_author": dict(sorted(commit_counts.items(), key=lambda kv: -kv[1])),
+            "top_author": top_author,
+            "top_share": top_commit_share,
+        },
     }
 
-def calculate_commit_metrics(commits):
-    if not commits or not isinstance(commits, list):
-        return {}
 
-    author_counts = {}
-    for commit in commits:
-        author = commit.get("commit", {}).get("author", {}).get("name", "Unknown")
-        author_counts[author] = author_counts.get(author, 0) + 1
+def calculate_health_score(metrics):
+    """Returns (score, signals). Each signal explains one deduction, so the score is never a mystery."""
+    score, signals = 100, []
+    prs, reviews, commits = metrics["prs"], metrics["reviews"], metrics["commits"]
 
-    most_active = max(author_counts, key=author_counts.get) if author_counts else "Unknown"
+    merge = prs["median_merge_hours"]
+    if merge is not None and merge > 2 * MERGE_TARGET_HOURS:
+        score -= 25
+        signals.append(f"PRs take {merge:g} hours to merge, more than twice the {MERGE_TARGET_HOURS}-hour target.")
+    elif merge is not None and merge > MERGE_TARGET_HOURS:
+        score -= 12
+        signals.append(f"PRs take {merge:g} hours to merge, over the {MERGE_TARGET_HOURS}-hour target.")
 
-    return {
-        "total_commits": len(commits),
-        "commits_per_author": author_counts,
-        "most_active_author": most_active
-    }
-
-def calculate_health_score(pr_metrics, commit_metrics):
-    score = 100
-
-    if pr_metrics.get("avg_review_time_hours", 0) > 48:
-        score -= 30
-    elif pr_metrics.get("avg_review_time_hours", 0) > 24:
-        score -= 15
-
-    if pr_metrics.get("open_prs", 0) > 5:
-        score -= 20
-    elif pr_metrics.get("open_prs", 0) > 3:
+    weeks = [w["median_hours"] for w in prs["weekly"] if w["median_hours"] is not None]
+    if len(weeks) >= 3 and weeks[-1] > MERGE_TARGET_HOURS and weeks[-1] >= 2 * weeks[0]:
         score -= 10
+        signals.append(f"Merge time has climbed from {weeks[0]:g} to {weeks[-1]:g} hours over the last few weeks.")
 
-    commits_per_author = commit_metrics.get("commits_per_author", {})
-    if commits_per_author:
-        total = sum(commits_per_author.values())
-        max_commits = max(commits_per_author.values())
-        if total > 0 and (max_commits / total) > 0.8:
+    if prs["stale_open"] >= 5:
+        score -= 15
+        signals.append(f"{prs['stale_open']} PRs have been open for more than 3 days.")
+    elif prs["stale_open"] >= 2:
+        score -= 8
+        signals.append(f"{prs['stale_open']} PRs have been open for more than 3 days.")
+
+    # Workload balance only means something when there is a team to balance it across.
+    if not metrics["solo"]:
+        if reviews["total"] >= 5 and reviews["top_share"] > 70:
             score -= 25
+            signals.append(f"{reviews['top_reviewer']} did {reviews['top_share']}% of all reviews.")
+        elif reviews["total"] >= 5 and reviews["top_share"] > REVIEW_SHARE_LIMIT:
+            score -= 12
+            signals.append(f"{reviews['top_reviewer']} did {reviews['top_share']}% of all reviews, over the {REVIEW_SHARE_LIMIT}% limit.")
+        if commits["total"] >= 10 and commits["top_share"] > 80:
+            score -= 10
+            signals.append(f"{commits['top_author']} made {commits['top_share']}% of all commits.")
 
-    return max(score, 0)
+    return max(score, 0), signals
 
-if __name__ == "__main__":
-    sample_prs = [
-        {"state": "closed", "merged_at": "2026-03-10T10:00:00Z", "created_at": "2026-03-08T10:00:00Z"},
-        {"state": "open", "merged_at": None, "created_at": "2026-03-12T10:00:00Z"},
-    ]
-    sample_commits = [
-        {"commit": {"author": {"name": "Abi"}}},
-        {"commit": {"author": {"name": "Abi"}}},
-        {"commit": {"author": {"name": "John"}}},
-    ]
 
-    pr_metrics = calculate_pr_metrics(sample_prs)
-    commit_metrics = calculate_commit_metrics(sample_commits)
-    health_score = calculate_health_score(pr_metrics, commit_metrics)
-
-    print("PR Metrics:", pr_metrics)
-    print("Commit Metrics:", commit_metrics)
-    print("Team Health Score:", health_score)
+def health_status(score):
+    if score >= 80:
+        return "healthy"
+    if score >= 60:
+        return "watch"
+    return "at_risk"

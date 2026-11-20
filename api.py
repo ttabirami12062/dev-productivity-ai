@@ -1,12 +1,15 @@
 import os
+import re
 import sys
 import json
 import time
+import logging
 import smtplib
+import threading
 from html import escape
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
@@ -15,20 +18,32 @@ load_dotenv()
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from src.github_client import get_pull_requests, get_commits, get_contributors
-from src.metrics import calculate_pr_metrics, calculate_commit_metrics, calculate_health_score
+from src.github_client import GitHubError, fetch_repo_activity
+from src.metrics import calculate_metrics, calculate_health_score, health_status
 from src.report_generator import generate_health_report
-from src.rag_pipeline import build_rag_context
+from src.rag_pipeline import retrieve_history
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("api")
 
 app = FastAPI()
 
+# The dashboard sends no cookies, so credentials stay off. ALLOWED_ORIGINS can lock
+# this to the Vercel site, e.g. "https://dev-productivity-ai.vercel.app".
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=[o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",")],
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+# Every analysis costs an OpenAI call, so repeat requests for the same repo reuse the
+# last result for an hour, and each visitor gets a handful of fresh analyses per hour.
+CACHE_SECONDS = 3600
+HOURLY_LIMIT = int(os.getenv("HOURLY_LIMIT", "8"))
+_cache, _requests_by_ip, _lock = {}, {}, threading.Lock()
+NAME = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
 
 REVIEWS_FILE = "reviews.json"
 GMAIL_ADDRESS = os.getenv("GMAIL_ADDRESS")
@@ -86,46 +101,93 @@ def send_email(review):
         print(f"Email failed: {e}")
 
 class AnalyzeRequest(BaseModel):
-    owner: str
-    repo: str
+    owner: str = Field(max_length=100)
+    repo: str = Field(max_length=100)
 
 class ReviewRequest(BaseModel):
-    owner: str
-    repo: str
+    owner: str = Field(max_length=100)
+    repo: str = Field(max_length=100)
     rating: int = Field(ge=1, le=5)
-    comment: str = ""
-    name: str = ""
-    user_email: str = ""
-    role: str = ""
+    comment: str = Field("", max_length=2000)
+    name: str = Field("", max_length=100)
+    user_email: str = Field("", max_length=200)
+    role: str = Field("", max_length=100)
 
+
+def _client_ip(request):
+    # Render sits behind a proxy, so the visitor's address is the first forwarded one.
+    forwarded = request.headers.get("x-forwarded-for", "")
+    return forwarded.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+
+
+def _over_limit(ip):
+    now = time.time()
+    with _lock:
+        recent = [t for t in _requests_by_ip.get(ip, []) if now - t < 3600]
+        if len(recent) >= HOURLY_LIMIT:
+            _requests_by_ip[ip] = recent
+            return True
+        _requests_by_ip[ip] = recent + [now]
+        return False
+
+
+def _fail(message):
+    return {"success": False, "error": message}
+
+# Plain "def" so FastAPI runs it in a worker thread: the GitHub and OpenAI calls
+# are blocking, and inside "async def" they would make every other visitor wait.
 @app.post("/analyze")
-async def analyze(request: AnalyzeRequest):
+def analyze(body: AnalyzeRequest, request: Request):
+    owner, repo = body.owner.strip(), body.repo.strip()
+    if not (NAME.match(owner) and NAME.match(repo)):
+        return _fail("That doesn't look like a GitHub repository. Use the form owner/name, for example vercel/swr.")
+
+    key = f"{owner}/{repo}".lower()
+    cached = _cache.get(key)
+    if cached and time.time() - cached[0] < CACHE_SECONDS:
+        return {**cached[1], "cached": True}
+
+    if _over_limit(_client_ip(request)):
+        return _fail("You've run a lot of analyses in the last hour. Please try again a little later.")
+
+    started = time.time()
     try:
-        pull_requests = get_pull_requests(request.owner, request.repo)
-        commits = get_commits(request.owner, request.repo)
-        contributors = get_contributors(request.owner, request.repo)
+        activity = fetch_repo_activity(owner, repo)
+        metrics = calculate_metrics(activity)
+        score, signals = calculate_health_score(metrics)
 
-        pr_metrics = calculate_pr_metrics(pull_requests)
-        commit_metrics = calculate_commit_metrics(commits)
-        health_score = calculate_health_score(pr_metrics, commit_metrics)
+        try:
+            history = retrieve_history(signals)
+        except Exception:
+            # A report without history is still useful, so don't fail the whole analysis.
+            log.exception("History search failed")
+            history = []
 
-        rag_context = build_rag_context(pr_metrics, commit_metrics, health_score)
-        report = generate_health_report(pr_metrics, commit_metrics, health_score, rag_context)
+        report, usage = generate_health_report(activity["owner"], activity["repo"], metrics, score, signals, history)
+    except GitHubError as e:
+        return _fail(str(e))
+    except Exception:
+        log.exception("Analysis failed for %s", key)
+        return _fail("Something went wrong on our side while writing the report. Please try again in a minute.")
 
-        return {
-            "success": True,
-            "owner": request.owner,
-            "repo": request.repo,
-            "health_score": health_score,
-            "pr_metrics": pr_metrics,
-            "commit_metrics": commit_metrics,
-            "report": report
-        }
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    result = {
+        "success": True,
+        "owner": activity["owner"],
+        "repo": activity["repo"],
+        "health_score": score,
+        "status": health_status(score),
+        "signals": signals,
+        "metrics": metrics,
+        "report": report,
+        "sources": [{"id": i, "title": h["title"], "match": h["match"]} for i, h in enumerate(history, start=1)],
+        "generated_seconds": round(time.time() - started, 1),
+        "usage": usage,
+    }
+    _cache[key] = (time.time(), result)
+    return result
 
 @app.post("/review")
-async def submit_review(request: ReviewRequest):
+def submit_review(request: ReviewRequest):
     review = {
         "owner": request.owner,
         "repo": request.repo,
