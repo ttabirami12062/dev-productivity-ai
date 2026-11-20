@@ -2,9 +2,9 @@ import json
 import os
 
 from dotenv import load_dotenv
-from openai import OpenAI
 
 from src.metrics import duration
+from src.observability import OpenAI, generation_options
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env'))
 
@@ -94,6 +94,7 @@ def generate_health_report(owner, repo, metrics, score, signals, history):
         response_format={"type": "json_object"},
         max_completion_tokens=1500,
         **options,
+        **generation_options("report-writer"),
     )
     report = _clean(json.loads(response.choices[0].message.content), max_source=len(history))
     usage = response.usage

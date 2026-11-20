@@ -7,6 +7,8 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pinecone import Pinecone, ServerlessSpec
 
+from src.observability import retriever
+
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env'))
 
 INDEX_NAME = "dev-productivity"
@@ -64,6 +66,7 @@ def build_index():
     print(f"Stored {len(chunks)} chunks from {len(documents)} documents in Pinecone")
 
 
+@retriever
 def retrieve_history(signals, k=4):
     """Finds the past incidents and retros most like this week's signals.
 

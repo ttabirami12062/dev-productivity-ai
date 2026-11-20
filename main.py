@@ -11,6 +11,7 @@ from src.github_client import fetch_repo_activity
 from src.metrics import calculate_metrics, calculate_health_score
 from src.rag_pipeline import retrieve_history
 from src.report_generator import generate_health_report, report_as_text
+from src.observability import flush
 
 
 def run_analysis(owner, repo):
@@ -37,3 +38,4 @@ def run_analysis(owner, repo):
 if __name__ == "__main__":
     owner, repo = (sys.argv[1].split("/", 1) if len(sys.argv) > 1 else ("ttabirami12062", "IPMS"))
     run_analysis(owner, repo)
+    flush()  # send any pending Langfuse traces before the script exits

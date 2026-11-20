@@ -23,6 +23,7 @@ from src.github_client import GitHubError, fetch_repo_activity
 from src.metrics import calculate_metrics, calculate_health_score, health_status
 from src.report_generator import generate_health_report
 from src.rag_pipeline import retrieve_history
+from src.observability import report_trace
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("api")
@@ -44,7 +45,8 @@ app.add_middleware(
 CACHE_SECONDS = 3600
 HOURLY_LIMIT = int(os.getenv("HOURLY_LIMIT", "8"))
 # A spending cap that doesn't depend on OpenAI's dashboard: at most this many new
-# reports per day across all visitors (about $0.002 each, so 300 is about $0.60).
+# reports per day across all visitors (measured in Langfuse at about $0.0025 each,
+# so 300 is about $0.75 and 80 is about $0.20).
 DAILY_LIMIT = int(os.getenv("DAILY_LIMIT", "300"))
 _cache, _requests_by_ip, _lock = {}, {}, threading.Lock()
 _daily = {"day": "", "count": 0}
@@ -181,24 +183,33 @@ def analyze(body: AnalyzeRequest, request: Request):
         return _fail("The site has written its maximum number of reports for today. Please come back tomorrow.")
 
     started = time.time()
-    try:
-        activity = fetch_repo_activity(owner, repo, tz)
-        metrics = calculate_metrics(activity)
-        score, signals = calculate_health_score(metrics)
-
+    with report_trace(owner, repo, str(tz)) as record:
         try:
-            history = retrieve_history(signals)
-        except Exception:
-            # A report without history is still useful, so don't fail the whole analysis.
-            log.exception("History search failed")
-            history = []
+            activity = fetch_repo_activity(owner, repo, tz)
+            metrics = calculate_metrics(activity)
+            score, signals = calculate_health_score(metrics)
 
-        report, usage = generate_health_report(activity["owner"], activity["repo"], metrics, score, signals, history)
-    except GitHubError as e:
-        return _fail(str(e))
-    except Exception:
-        log.exception("Analysis failed for %s", key)
-        return _fail("Something went wrong on our side while writing the report. Please try again in a minute.")
+            try:
+                history = retrieve_history(signals)
+            except Exception:
+                # A report without history is still useful, so don't fail the whole analysis.
+                log.exception("History search failed")
+                history = []
+
+            report, usage = generate_health_report(activity["owner"], activity["repo"], metrics, score, signals, history)
+        except GitHubError as e:
+            record(error=str(e))
+            return _fail(str(e))
+        except Exception as e:
+            log.exception("Analysis failed for %s", key)
+            record(error=type(e).__name__)
+            if "insufficient_quota" in str(e):
+                return _fail("This demo has used up its AI budget for now. Please check back later.")
+            return _fail("Something went wrong on our side while writing the report. Please try again in a minute.")
+
+        status = "quiet" if metrics["quiet"] else health_status(score)
+        record(score=score, status=status, headline=report["headline"], signals=signals,
+               sources=[h["title"] for h in history], seconds=round(time.time() - started, 1))
 
     result = {
         "success": True,
@@ -206,7 +217,7 @@ def analyze(body: AnalyzeRequest, request: Request):
         "repo": activity["repo"],
         "health_score": score,
         # A near-empty repo would otherwise read as a perfect score.
-        "status": "quiet" if metrics["quiet"] else health_status(score),
+        "status": status,
         "signals": signals,
         "metrics": metrics,
         "report": report,

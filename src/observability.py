@@ -1,17 +1,58 @@
+"""Langfuse tracing for every report.
+
+Each analysis becomes one trace in Langfuse: the history search shows up as a
+retriever step and the OpenAI call as a generation with its tokens, cost and
+latency. Without Langfuse keys (CI, a fresh checkout) everything here quietly
+does nothing, so the app never depends on Langfuse being reachable.
+"""
 import os
-import time
+from contextlib import contextmanager
+
 from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env'))
 
-os.environ["LANGFUSE_PUBLIC_KEY"] = os.getenv("LANGFUSE_PUBLIC_KEY", "")
-os.environ["LANGFUSE_SECRET_KEY"] = os.getenv("LANGFUSE_SECRET_KEY", "")
-os.environ["LANGFUSE_HOST"] = os.getenv("LANGFUSE_BASE_URL", "https://us.cloud.langfuse.com")
+# Older .env files name the region URL LANGFUSE_BASE_URL; the SDK also reads LANGFUSE_HOST.
+if os.getenv("LANGFUSE_BASE_URL") and not os.getenv("LANGFUSE_HOST"):
+    os.environ["LANGFUSE_HOST"] = os.environ["LANGFUSE_BASE_URL"]
 
-def track_report_generation(pr_metrics, commit_metrics, health_score, report, latency_ms, cost_estimate):
-    print(f"Tracked to Langfuse - Latency: {latency_ms}ms, Cost: ${cost_estimate}")
-    print(f"Health Score: {health_score}/100")
-    print(f"Most Active Author: {commit_metrics.get('most_active_author')}")
+ENABLED = bool(os.getenv("LANGFUSE_PUBLIC_KEY") and os.getenv("LANGFUSE_SECRET_KEY"))
 
-if __name__ == "__main__":
-    print("Langfuse v4 configured successfully!")
+if ENABLED:
+    from langfuse import get_client, observe, propagate_attributes
+    from langfuse.openai import OpenAI  # drop-in client that records each call as a generation
+else:
+    from openai import OpenAI  # noqa: F401  (re-exported for report_generator)
+
+
+def retriever(func):
+    """Marks a function as the retrieval step in the trace."""
+    return observe(name="history-search", as_type="retriever")(func) if ENABLED else func
+
+
+@contextmanager
+def report_trace(owner, repo, timezone):
+    """Wraps one analysis. Yields a callback that records the outcome on the trace."""
+    if not ENABLED:
+        yield lambda **_: None
+        return
+
+    langfuse = get_client()
+    with propagate_attributes(trace_name="weekly-report", tags=["report"], metadata={"repo": f"{owner}/{repo}", "timezone": timezone}):
+        with langfuse.start_as_current_observation(as_type="span", name="weekly-report",
+                                                   input={"repo": f"{owner}/{repo}", "timezone": timezone}) as span:
+            def finish(score=None, status=None, headline=None, error=None, **extra):
+                span.update(output={"score": score, "status": status, "headline": headline, "error": error, **extra})
+                if score is not None:
+                    langfuse.score_current_trace(name="health_score", value=score, comment=status)
+            yield finish
+
+
+def generation_options(name):
+    """Extra arguments the Langfuse OpenAI client understands; the plain client would reject them."""
+    return {"name": name} if ENABLED else {}
+
+
+def flush():
+    if ENABLED:
+        get_client().flush()
