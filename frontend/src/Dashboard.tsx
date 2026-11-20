@@ -132,7 +132,11 @@ export default function Dashboard({ data }: { data: Analysis }) {
       {m.uses_prs && <div className="evidence">
         <div className="panel chart">
           <h3>How long PRs waited to be merged, by week</h3>
-          <p className="hint">Bar height is the typical wait (median) for PRs merged that week, not how many there were. The count is under each bar. Red means over the {MERGE_TARGET}-hour target.</p>
+          <p className="hint">
+            Each bar holds the PRs merged that week. Its height is how long they had waited since being opened (the typical, or median, wait),
+            not how many there were. A PR opened in an earlier week still counts in the week it was merged. Red means over the {MERGE_TARGET}-hour target.
+            Dates are in UTC, so they can be a day off from what GitHub shows in your time zone.
+          </p>
           <MergeChart weeks={m.prs.weekly} target={MERGE_TARGET} />
         </div>
         <div className="panel">

@@ -83,7 +83,7 @@ export function MergeChart({ weeks, target }: { weeks: Week[]; target: number })
               <text x={x + bwid / 2} y={y(v) - 6} textAnchor="middle" style={{ fill: v > target ? COLORS.bad : COLORS.ink2, fontWeight: 500 }}>{v}h</text>
             )}
             <text x={x + bwid / 2} y={H - 24} textAnchor="middle">{w.label.replace('-', '\u2013')}</text>
-            <text x={x + bwid / 2} y={H - 9} textAnchor="middle" style={{ fill: COLORS.ink2 }}>{w.merged === 1 ? '1 PR' : `${w.merged} PRs`}</text>
+            <text x={x + bwid / 2} y={H - 9} textAnchor="middle" style={{ fill: COLORS.ink2 }}>{w.merged === 1 ? '1 merged' : `${w.merged} merged`}</text>
           </g>
         );
       })}
