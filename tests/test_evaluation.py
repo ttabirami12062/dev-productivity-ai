@@ -16,8 +16,8 @@ def metrics_for(case):
     weeks = [{"label": f"W{i + 1}", "median_hours": h, "merged": 3} for i, h in enumerate(case["weekly_hours"])]
     reviews, commits = case["reviews"], case["commits"]
     return {
-        "window": {"since": "2026-10-09", "until": "2026-11-20", "days": 42},
-        "people": case["people"], "solo": case["people"] <= 1,
+        "window": {"since": "2026-10-09", "until": "2026-11-20", "days": 42, "timezone": "UTC"},
+        "people": case["people"], "solo": case["people"] <= 1, "quiet": False, "uses_prs": True,
         "prs": {"total": 20, "merged": 14, "open": case["open"], "stale_open": case["stale_open"], "closed_unmerged": 1,
                 "median_merge_hours": case["median_merge_hours"], "weekly": weeks},
         "reviews": {"total": sum(reviews.values()), "reviewed_prs": 14, "per_reviewer": reviews,
