@@ -131,8 +131,8 @@ export default function Dashboard({ data }: { data: Analysis }) {
       </p>
       {m.uses_prs && <div className="evidence">
         <div className="panel chart">
-          <h3>Hours from open to merge, by week</h3>
-          <p className="hint">Median for PRs merged that week. Bars turn red above the {MERGE_TARGET}-hour target.</p>
+          <h3>How long PRs waited to be merged, by week</h3>
+          <p className="hint">Bar height is the typical wait (median) for PRs merged that week, not how many there were. The count is under each bar. Red means over the {MERGE_TARGET}-hour target.</p>
           <MergeChart weeks={m.prs.weekly} target={MERGE_TARGET} />
         </div>
         <div className="panel">

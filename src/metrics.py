@@ -42,9 +42,12 @@ def _weekly_merge_hours(merged, until, weeks=6):
     for i in range(weeks, 0, -1):
         start, end = until - timedelta(days=7 * i), until - timedelta(days=7 * (i - 1))
         hours = [h for at, h in merged if start <= at < end]
+        last = end - timedelta(days=1)
+        # A range, not just the start date: "Oct 9" alone reads as a single day.
+        label = f"{start:%b} {start.day}-{last.day}" if start.month == last.month else f"{start:%b} {start.day}-{last:%b} {last.day}"
         buckets.append({
             "week_start": start.date().isoformat(),
-            "label": f"{start:%b} {start.day}",
+            "label": label,
             "merged": len(hours),
             "median_hours": round(median(hours), 1) if hours else None,
         })

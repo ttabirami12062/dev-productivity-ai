@@ -50,7 +50,7 @@ export function Pulse({ score, status }: { score: number; status: Status }) {
 }
 
 export function MergeChart({ weeks, target }: { weeks: Week[]; target: number }) {
-  const W = 520, H = 220, L = 38, R = 10, T = 16, B = 28;
+  const W = 540, H = 236, L = 38, R = 10, T = 16, B = 42;
   const highest = Math.max(target, ...weeks.map((w) => w.median_hours ?? 0));
   // Pick a round step that gives at most about six grid lines, even for month-long waits.
   const step = [10, 20, 50, 100, 200, 500, 1000].find((st) => (highest * 1.1) / st <= 6) ?? 2000;
@@ -82,7 +82,8 @@ export function MergeChart({ weeks, target }: { weeks: Week[]; target: number })
             {v !== null && i === lastWithData && (
               <text x={x + bwid / 2} y={y(v) - 6} textAnchor="middle" style={{ fill: v > target ? COLORS.bad : COLORS.ink2, fontWeight: 500 }}>{v}h</text>
             )}
-            <text x={x + bwid / 2} y={H - 9} textAnchor="middle">{w.label}</text>
+            <text x={x + bwid / 2} y={H - 24} textAnchor="middle">{w.label.replace('-', '\u2013')}</text>
+            <text x={x + bwid / 2} y={H - 9} textAnchor="middle" style={{ fill: COLORS.ink2 }}>{w.merged === 1 ? '1 PR' : `${w.merged} PRs`}</text>
           </g>
         );
       })}
