@@ -17,10 +17,19 @@ export function parseRepo(input: string): { owner: string; repo: string } | null
   return owner && repo && ok.test(owner) && ok.test(repo) ? { owner, repo } : null;
 }
 
+// The browser's own time zone, e.g. "America/Chicago", so weeks and dates match GitHub for this visitor.
+export const timeZone = (() => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+})();
+
 export async function analyzeRepo(owner: string, repo: string): Promise<AnalyzeResponse> {
   try {
     // The free server can take close to a minute to wake up, so allow plenty of time.
-    const res = await axios.post<AnalyzeResponse>(`${API_URL}/analyze`, { owner, repo }, { timeout: 150000 });
+    const res = await axios.post<AnalyzeResponse>(`${API_URL}/analyze`, { owner, repo, timezone: timeZone }, { timeout: 150000 });
     return res.data;
   } catch {
     return { success: false, error: "We couldn't reach the server. Check your connection and try again." };

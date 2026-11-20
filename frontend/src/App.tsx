@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { analyzeRepo, parseRepo } from './api';
+import { analyzeRepo, parseRepo, timeZone } from './api';
 import { BrandMark } from './charts';
 import Dashboard from './Dashboard';
 import Feedback from './Feedback';
+import Guide from './Guide';
 import { Analysis } from './types';
 
 const EXAMPLES = ['vercel/swr', 'pallets/flask', 'fastapi/fastapi'];
@@ -29,6 +30,7 @@ export default function App() {
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState('');
   const [result, setResult] = useState<Analysis | null>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   useEffect(() => {
     if (!loading) return;
@@ -67,6 +69,14 @@ export default function App() {
             <input id="repo" value={input} onChange={(e) => setInput(e.target.value)} placeholder="owner/repository" autoComplete="off" spellCheck={false} />
             <button className="btn" type="submit" disabled={loading}>{loading ? 'Analyzing...' : 'Analyze'}</button>
           </form>
+          <button type="button" className="guide-open" onClick={() => setGuideOpen(true)}>
+            <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true">
+              <circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+              <path d="M7.6 7.6a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+              <circle cx="10" cy="14.6" r="1" fill="currentColor" />
+            </svg>
+            How to read this
+          </button>
         </header>
 
         {error && <p className="error banner" role="alert">{error}</p>}
@@ -101,6 +111,8 @@ export default function App() {
             <Feedback owner={result.owner} repo={result.repo} />
           </>
         )}
+
+        <Guide open={guideOpen} onClose={() => setGuideOpen(false)} timeZone={timeZone} />
 
         <footer className="foot">
           <span>Built by Abirami Thiyagarajan</span>

@@ -41,7 +41,7 @@ export default function Dashboard({ data }: { data: Analysis }) {
       <section className="verdict">
         <div className="verdict-text">
           <p className="eyebrow">
-            {data.owner}/{data.repo} &middot; {fmtDate(m.window.since)} to {fmtDate(m.window.until)}
+            {data.owner}/{data.repo} &middot; {fmtDate(m.window.since)} to {fmtDate(m.window.until)} &middot; {m.window.timezone.replace(/_/g, ' ')}
           </p>
           <Headline text={report.headline} highlight={report.highlight} />
           <p className="summary">{report.summary}</p>
@@ -135,7 +135,7 @@ export default function Dashboard({ data }: { data: Analysis }) {
           <p className="hint">
             Each bar holds the PRs merged that week. Its height is how long they had waited since being opened (the typical, or median, wait),
             not how many there were. A PR opened in an earlier week still counts in the week it was merged. Red means over the {MERGE_TARGET}-hour target.
-            Dates are in UTC, so they can be a day off from what GitHub shows in your time zone.
+            Dates are in your time zone ({m.window.timezone}), so they match what GitHub shows you.
           </p>
           <MergeChart weeks={m.prs.weekly} target={MERGE_TARGET} />
         </div>

@@ -9,7 +9,7 @@ export interface Week {
 }
 
 export interface Metrics {
-  window: { since: string; until: string; days: number };
+  window: { since: string; until: string; days: number; timezone: string };
   people: number;
   solo: boolean;
   quiet: boolean;
