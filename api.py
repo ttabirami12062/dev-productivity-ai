@@ -43,7 +43,11 @@ app.add_middleware(
 # last result for an hour, and each visitor gets a handful of fresh analyses per hour.
 CACHE_SECONDS = 3600
 HOURLY_LIMIT = int(os.getenv("HOURLY_LIMIT", "8"))
+# A spending cap that doesn't depend on OpenAI's dashboard: at most this many new
+# reports per day across all visitors (about $0.002 each, so 300 is about $0.60).
+DAILY_LIMIT = int(os.getenv("DAILY_LIMIT", "300"))
 _cache, _requests_by_ip, _lock = {}, {}, threading.Lock()
+_daily = {"day": "", "count": 0}
 NAME = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
 
 REVIEWS_FILE = "reviews.json"
@@ -142,6 +146,17 @@ def _over_limit(ip):
         return False
 
 
+def _daily_cap_reached():
+    today = time.strftime("%Y-%m-%d", time.gmtime())
+    with _lock:
+        if _daily["day"] != today:
+            _daily.update(day=today, count=0)
+        if _daily["count"] >= DAILY_LIMIT:
+            return True
+        _daily["count"] += 1
+        return False
+
+
 def _fail(message):
     return {"success": False, "error": message}
 
@@ -161,6 +176,9 @@ def analyze(body: AnalyzeRequest, request: Request):
 
     if _over_limit(_client_ip(request)):
         return _fail("You've run a lot of analyses in the last hour. Please try again a little later.")
+    if _daily_cap_reached():
+        log.warning("Daily limit of %s reports reached", DAILY_LIMIT)
+        return _fail("The site has written its maximum number of reports for today. Please come back tomorrow.")
 
     started = time.time()
     try:
