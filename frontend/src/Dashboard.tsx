@@ -5,7 +5,7 @@ import { COLORS, Cite, LoadBars, MergeChart, Pulse, Sparkline, statusColor } fro
 const MERGE_TARGET = 24;
 const REVIEW_LIMIT = 50;
 
-const STATUS_LABEL = { healthy: 'Healthy', watch: 'Worth watching', at_risk: 'At risk' };
+const STATUS_LABEL = { healthy: 'Healthy', watch: 'Worth watching', at_risk: 'At risk', quiet: 'Too little activity' };
 const KIND_LABEL: Record<FindingKind, string> = { risk: 'Risk', action: 'Do this week', positive: 'Going well' };
 
 const fmtDate = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
@@ -59,6 +59,19 @@ export default function Dashboard({ data }: { data: Analysis }) {
       </section>
 
       <Pulse score={data.health_score} status={data.status} />
+
+      {m.quiet && (
+        <p className="notice">
+          Only {plural(m.prs.merged, 'merged PR')} and {plural(m.commits.total, 'commit')} in six weeks. That's too little to say much
+          about how the team is doing, so treat the score lightly.
+        </p>
+      )}
+      {!m.uses_prs && (
+        <p className="notice">
+          This project doesn't use GitHub pull requests (they're switched off), so it's judged on commits only. Many large projects,
+          like the Linux kernel, review code by email instead.
+        </p>
+      )}
 
       <section className="vitals" aria-label="Vital signs">
         <div className="vital">
@@ -116,7 +129,7 @@ export default function Dashboard({ data }: { data: Analysis }) {
       <p className="section-sub">
         From {plural(m.prs.total, 'pull request')} and {plural(m.commits.total, 'commit')} in the last {m.window.days / 7} weeks.
       </p>
-      <div className="evidence">
+      {m.uses_prs && <div className="evidence">
         <div className="panel chart">
           <h3>Hours from open to merge, by week</h3>
           <p className="hint">Median for PRs merged that week. Bars turn red above the {MERGE_TARGET}-hour target.</p>
@@ -138,7 +151,7 @@ export default function Dashboard({ data }: { data: Analysis }) {
             </p>
           )}
         </div>
-      </div>
+      </div>}
 
       <h2 className="section-title">This week's report</h2>
       <p className="section-sub">Written by AI from the numbers above and past incidents. Each claim links to its source.</p>

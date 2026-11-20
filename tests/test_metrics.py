@@ -62,6 +62,16 @@ def test_weekly_trend_has_six_weeks():
     assert len(weeks) == 6 and weeks[-1]["median_hours"] == 10.0
 
 
+def test_almost_no_activity_is_marked_quiet():
+    metrics = calculate_metrics(activity([pr(1, "dev", 10)], [commit("dev")], {}))
+    assert metrics["quiet"] and metrics["uses_prs"]
+
+
+def test_repo_without_pull_requests():
+    metrics = calculate_metrics(activity([], [commit("linus")] * 30, {}))
+    assert not metrics["uses_prs"] and not metrics["quiet"]
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

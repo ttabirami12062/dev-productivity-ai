@@ -41,6 +41,8 @@ def _team_data(owner, repo, metrics, score, signals):
                        for w in prs["weekly"])
     return f"""Repository: {owner}/{repo}, last {metrics['window']['days']} days ({metrics['window']['since']} to {metrics['window']['until']})
 People active: {metrics['people']}{' (solo project, so workload balance does not apply)' if metrics['solo'] else ''}
+{'VERY LITTLE ACTIVITY: say plainly that there is too little recent work to judge team health. Give no risks and no actions, only the positive finding.' if metrics['quiet'] else ''}
+{'This project does not use GitHub pull requests (they are switched off), so judge it on commits only and do not mention PR or review metrics.' if not metrics['uses_prs'] else ''}
 Health score: {score}/100
 What lowered the score: {' '.join(signals) if signals else 'nothing'}
 PRs: {prs['total']} active, {prs['merged']} merged, {prs['open']} open ({prs['stale_open']} open over 3 days), {prs['closed_unmerged']} closed without merging

@@ -28,12 +28,14 @@ def _headers():
     return headers
 
 
-def _get(path, params=None):
+def _get(path, params=None, missing_ok=False):
     try:
         response = requests.get(f"{API}{path}", headers=_headers(), params=params, timeout=15)
     except requests.RequestException:
         raise GitHubError("We couldn't reach GitHub. Please try again in a minute.")
 
+    if response.status_code == 404 and missing_ok:
+        return []
     if response.status_code == 404:
         raise GitHubError("We couldn't find that repository. Check the owner and name, and make sure it's public.")
     if response.status_code in (403, 429) and response.headers.get("X-RateLimit-Remaining") == "0":
@@ -58,8 +60,11 @@ def _recent_pull_requests(owner, repo, since):
     # Sorted by last update, so we can stop paging once PRs are older than the window.
     prs = []
     for page in range(1, MAX_PAGES + 1):
+        # Some projects (the Linux kernel, for one) switch pull requests off, and GitHub
+        # answers 404 even though the repo exists; treat that as "no PRs".
         batch = _get(f"/repos/{owner}/{repo}/pulls",
-                     {"state": "all", "sort": "updated", "direction": "desc", "per_page": 100, "page": page})
+                     {"state": "all", "sort": "updated", "direction": "desc", "per_page": 100, "page": page},
+                     missing_ok=True)
         for pr in batch:
             if _parse(pr["updated_at"]) < since:
                 return prs

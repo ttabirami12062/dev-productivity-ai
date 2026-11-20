@@ -10,7 +10,8 @@ export const COLORS = {
   bad: '#C8372D',
 };
 
-export const statusColor = (s: Status) => (s === 'healthy' ? COLORS.good : s === 'watch' ? COLORS.warn : COLORS.bad);
+export const statusColor = (s: Status) =>
+  s === 'healthy' ? COLORS.good : s === 'watch' ? COLORS.warn : s === 'quiet' ? COLORS.ink3 : COLORS.bad;
 
 export function Sparkline({ values, color }: { values: number[]; color: string }) {
   if (values.length < 2) return null;
@@ -30,7 +31,7 @@ export function Sparkline({ values, color }: { values: number[]; color: string }
 
 // A heartbeat trace whose spikes grow as the score drops, so the mood reads before any number.
 export function Pulse({ score, status }: { score: number; status: Status }) {
-  const strain = Math.max(0.15, (100 - score) / 100);
+  const strain = status === 'quiet' ? 0.05 : Math.max(0.15, (100 - score) / 100);
   const beats = [180, 360, 540, 720, 900];
   let d = 'M0 40';
   beats.forEach((x, i) => {

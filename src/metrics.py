@@ -6,6 +6,8 @@ from statistics import median
 MERGE_TARGET_HOURS = 24
 REVIEW_SHARE_LIMIT = 50
 STALE_OPEN_HOURS = 72
+# Below this much activity a score says more about silence than about the team.
+QUIET_ACTIVITY = 5
 
 
 def duration(hours):
@@ -84,6 +86,8 @@ def calculate_metrics(activity):
         "window": {"since": since.date().isoformat(), "until": until.date().isoformat(), "days": (until - since).days},
         "people": len(people),
         "solo": len(people) <= 1,
+        "quiet": len(merged) + len(activity["commits"]) < QUIET_ACTIVITY,
+        "uses_prs": bool(prs),
         "prs": {
             "total": len(prs),
             "merged": len(merged),

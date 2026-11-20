@@ -1,4 +1,4 @@
-export type Status = 'healthy' | 'watch' | 'at_risk';
+export type Status = 'healthy' | 'watch' | 'at_risk' | 'quiet';
 export type FindingKind = 'risk' | 'action' | 'positive';
 
 export interface Week {
@@ -12,6 +12,8 @@ export interface Metrics {
   window: { since: string; until: string; days: number };
   people: number;
   solo: boolean;
+  quiet: boolean;
+  uses_prs: boolean;
   prs: {
     total: number;
     merged: number;

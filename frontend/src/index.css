@@ -84,6 +84,8 @@ a.cite:hover { background: var(--accent); color: #fff; }
 .pill.at_risk { color: var(--bad); background: var(--bad-soft); }
 .pill.watch { color: var(--warn); background: var(--warn-soft); }
 .pill.healthy { color: var(--good); background: var(--good-soft); }
+.pill.quiet { color: var(--ink-2); background: #ECEFEB; }
+.notice { margin: 0 0 20px; background: #ECEFEB; color: var(--ink-2); border-radius: 10px; padding: 12px 16px; max-width: 80ch; }
 .delta { font: 500 13px var(--mono); color: var(--ink-2); }
 
 .pulse { height: 64px; margin: 0 0 28px; }

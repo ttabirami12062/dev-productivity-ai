@@ -175,7 +175,8 @@ def analyze(body: AnalyzeRequest, request: Request):
         "owner": activity["owner"],
         "repo": activity["repo"],
         "health_score": score,
-        "status": health_status(score),
+        # A near-empty repo would otherwise read as a perfect score.
+        "status": "quiet" if metrics["quiet"] else health_status(score),
         "signals": signals,
         "metrics": metrics,
         "report": report,
