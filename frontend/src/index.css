@@ -227,3 +227,26 @@ a.cite:hover { background: var(--accent); color: #fff; }
 .guide-foot { padding: 14px 20px; background: var(--sheet); border-top: 1px solid var(--rule); }
 .guide-foot .btn { width: 100%; padding: 12px; }
 @media (prefers-reduced-motion: reduce) { .guide, .guide-backdrop { transition: none; } }
+
+/* team history panel */
+.team-open { background: #FFF6D6; color: #7A5A00; }
+.team-open:hover { background: #FFEDB0; }
+.btn.wide { width: 100%; margin-top: 8px; padding: 12px; }
+.team-warn { font-size: 13px; color: #7A5A00 !important; background: #FFF6D6; border-radius: 8px; padding: 8px 10px; }
+.team-link { display: flex; gap: 8px; }
+.team-link input { flex: 1; min-width: 0; font: 500 12px var(--mono); color: var(--ink); background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; padding: 8px 10px; }
+.team-form { display: flex; flex-direction: column; gap: 6px; }
+.team-form label { font-size: 13px; font-weight: 600; color: var(--ink-2); margin-top: 6px; }
+.team-form label span { font-weight: 400; color: var(--ink-3); }
+.team-form input[type=text], .team-form input:not([type]), .team-form textarea { font: 400 14px var(--body); color: var(--ink); background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; padding: 9px 11px; }
+.team-form textarea { min-height: 130px; resize: vertical; }
+.team-form input:focus, .team-form textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.team-docs { list-style: none; padding: 0 !important; margin: 0; display: flex; flex-direction: column; gap: 8px !important; }
+.team-docs li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; background: var(--sheet); border: 1px solid var(--rule); border-radius: 10px; padding: 10px 12px; }
+.team-docs b { display: block; font-size: 14px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-docs span { font-size: 12px; color: var(--ink-3); }
+.team-remove { font: 600 12px var(--body); color: var(--bad); background: none; border: 0; cursor: pointer; padding: 4px; }
+.link-button { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; }
+.source-kind { display: table; font: 600 10px var(--mono); letter-spacing: 0.04em; text-transform: uppercase; border-radius: 4px; padding: 1px 5px; margin: 2px 6px 2px 0; }
+.source-kind.team { color: var(--accent); background: var(--accent-soft); }
+.source-kind.sample { color: var(--ink-3); background: #ECEFEB; }

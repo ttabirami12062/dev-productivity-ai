@@ -148,8 +148,8 @@ export default function Guide({ open, onClose, timeZone }: { open: boolean; onCl
               than generic tips.
             </p>
             <p>
-              For now the library holds two sample documents about an example team, so every project is compared with the same examples. Soon teams will be
-              able to add their own.
+              Out of the box the library holds two sample documents about an example team. Open "Your team's history" at the top to add your own
+              incident reports and retros. Reports run from your team's link then cite them instead, marked "Your team's document".
             </p>
           </Section>
 

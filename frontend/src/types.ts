@@ -50,6 +50,7 @@ export interface Source {
   id: number;
   title: string;
   match: number;
+  kind?: 'team' | 'sample';
 }
 
 export interface Analysis {

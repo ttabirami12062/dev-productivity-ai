@@ -25,7 +25,7 @@ function Headline({ text, highlight }: { text: string; highlight: string }) {
   );
 }
 
-export default function Dashboard({ data }: { data: Analysis }) {
+export default function Dashboard({ data, onAddHistory }: { data: Analysis; onAddHistory: () => void }) {
   const { metrics: m, report, sources } = data;
   const color = statusColor(data.status);
   // Source 0 is the GitHub data itself; show it after the history documents.
@@ -187,6 +187,7 @@ export default function Dashboard({ data }: { data: Analysis }) {
               <Cite n={s.id} />
               <div>
                 <b>{s.title}</b>
+                <span className={`source-kind ${s.kind || 'sample'}`}>{s.kind === 'team' ? "Your team's document" : 'Sample'}</span>
                 <span className="match">{s.match}% match</span>
               </div>
             </div>
@@ -198,9 +199,15 @@ export default function Dashboard({ data }: { data: Analysis }) {
               <span>{plural(m.prs.total, 'PR', m.capped?.prs)}, {plural(m.commits.total, 'commit', m.capped?.commits)}, {plural(m.reviews.total, 'review')}</span>
             </div>
           </div>
-          <p className="sources-note">
-            The incident report and retro are sample documents for now. Soon you'll be able to add your team's own, so reports cite your real history.
-          </p>
+          {sources.some((s) => s.kind === 'team') ? (
+            <p className="sources-note">These come from your team's own documents.</p>
+          ) : (
+            <p className="sources-note">
+              These are sample documents about an example team.{' '}
+              <button type="button" className="link-button" onClick={onAddHistory}>Add your team's history</button> so reports cite what really
+              happened to you.
+            </p>
+          )}
         </aside>
       </div>
 

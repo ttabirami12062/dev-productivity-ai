@@ -52,7 +52,7 @@ flowchart LR
    | One person makes over 80% of commits | -10 |
 
    Solo projects aren't penalized for having one person do everything. Projects with very little activity are labelled "too little activity" instead of getting a misleading score, and projects that switch pull requests off, like the Linux kernel, are judged on commits alone.
-4. **Retrieve.** The warning signs are embedded and searched against a Pinecone index of past incident reports and sprint retrospectives. Each match comes back with a similarity score that's shown to the user.
+4. **Retrieve.** The warning signs are embedded and searched against a Pinecone index of past incident reports and sprint retrospectives. Each match comes back with a similarity score that's shown to the user. A team can create a private team space and add its own incident reports, retros and postmortems (pasted, or as .txt, .md or .pdf files); each team gets its own Pinecone namespace, and reports run from the team's link search only that team's documents, marked "Your team's document".
 5. **Generate.** The metrics, the reasons and the retrieved documents go to `gpt-5.4-mini`, which returns JSON: a headline, up to two risks, up to two actions and one thing going well, each citing numbered sources. The model is told to use only the numbers it's given.
 6. **Validate.** The response is checked against the expected shape, and any citation pointing to a source that wasn't provided is removed. Every number in the report is then checked against the data and documents the model was given, so an invented or miscalculated figure is flagged on the page and in Langfuse.
 7. **Trace.** Every analysis is recorded in Langfuse as one trace: the history search, the embedding call and the report generation, each with its latency, token counts and cost, plus the final health score.
@@ -74,6 +74,8 @@ A "How to read this" panel in the app explains every number, chart and label in 
 | A reason for every point deducted | Managers can see why the score moved, and disagree with it if they want |
 | Time zone sent by the browser | Mixing UTC and local time moved PRs into the wrong week during testing |
 | One-hour cache, a per-visitor hourly limit and a site-wide daily cap | Keeps API costs predictable on a public demo. Langfuse measures a report at about $0.0025 |
+| A private team link instead of accounts | Teams can bring their own history in one click, recruiters can try it without signing up, and GitHub sign-in can be added on top later |
+| One Pinecone namespace per team, and documents treated as reference only | Teams never see each other's documents, and a document containing instructions ("ignore your rules…") can't steer the report; this was tested with exactly such a document |
 | Visitor ratings stored as Langfuse scores on the report's trace | Feedback survives redeploys (Render's disk doesn't) and sits next to the exact report it rates; names and emails go only to the owner's inbox |
 | Langfuse tracing, switched off when keys are absent | Latency, tokens and cost per step are visible in production, while CI and fresh checkouts run without it |
 | Exact library versions in `requirements.txt` | An unpinned dependency update is what originally broke the live site |
@@ -88,6 +90,7 @@ A "How to read this" panel in the app explains every number, chart and label in 
 Every push runs two checks in GitHub Actions:
 
 - **Scoring tests** (`tests/test_metrics.py`) check the health score math on hand-built data with no API calls: solo projects, overloaded reviewers, duplicate reviews, quiet repositories and repositories without pull requests.
+- **Upload tests** (`tests/test_team_docs.py`) check that team links are long and random, and that wrong file types, oversized files and broken PDFs get clear messages.
 - **Number detector tests** (`tests/test_citation_check.py`) confirm the number check passes real figures and catches invented ones (a made-up "57%") and miscalculated ones ("6.1 days").
 - **Report evaluation** (`tests/test_evaluation.py`) generates reports for a golden dataset of six team scenarios (an overloaded reviewer, a healthy team, a PR backlog, a solo maintainer, a nearly inactive repo and a project with pull requests switched off) and checks that each has a headline and the required finding types, raises no risks for a healthy team, cites only sources that exist, uses only numbers found in its inputs, and mentions the key topic. A second model then acts as a judge, reading each finding next to the sources it cites and deciding whether they support it. The build fails if fewer than 80% of reports pass or fewer than 90% of cited findings are supported.
 
@@ -115,14 +118,15 @@ Before going live, the pipeline was also tested against twelve real projects, in
 
 These are honest gaps, and the next things on the roadmap.
 
-- **The incident library is a sample.** It holds two example documents, an incident report and a sprint retrospective, about a fictional team. Every repository is compared with the same two, and the dashboard says so. Letting each team upload its own history is the next major feature.
+- **Sample history by default.** Without a team space, reports compare a project with two example documents about a fictional team, and the dashboard labels them "Sample". Team spaces replace them with the team's own documents.
+- **Team links, not accounts.** Anyone with a team's link can see and change its documents, like an "anyone with the link" share. Uploaded text also appears in the owner's Langfuse traces, so the app asks people not to upload anything confidential.
 - **No stored history.** Each analysis covers six weeks fetched live, so there are no month-over-month trends yet.
 - **Sampling on busy repositories.** At most 300 PRs and 300 commits are read; when a project has more, the dashboard shows the totals as "300+". Reviews are counted on every PR merged in the six weeks.
 - **Public repositories only.** Private repositories would need a GitHub App with read-only, per-repository access, plus login and per-company data separation.
 
 ## Roadmap
 
-- [ ] Teams upload their own incident reports and retrospectives, stored in a separate Pinecone namespace per team
+- [x] Teams upload their own incident reports and retrospectives, stored in a separate Pinecone namespace per team
 - [ ] Store weekly snapshots in Postgres, collected by a nightly job, for long-term trends
 - [ ] More signals: cycle time from first commit, time to first review, code churn, files with repeated bug fixes, after-hours work in each contributor's time zone
 - [x] Langfuse tracing for latency, tokens and cost per report
@@ -168,6 +172,7 @@ dev-productivity-ai/
 │   ├── rag_pipeline.py       # Builds and searches the Pinecone index
 │   ├── report_generator.py   # Prompt and JSON report
 │   ├── citation_check.py     # Number check (live) and citation judge (CI)
+│   ├── team_docs.py          # Team spaces: add, list and remove documents per namespace
 │   └── observability.py      # Langfuse tracing (off when keys are missing)
 ├── documents/                # Sample incident report and retrospective
 ├── tests/                    # Scoring tests, golden dataset and report evaluation

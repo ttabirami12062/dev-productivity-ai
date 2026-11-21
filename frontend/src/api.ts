@@ -26,10 +26,10 @@ export const timeZone = (() => {
   }
 })();
 
-export async function analyzeRepo(owner: string, repo: string): Promise<AnalyzeResponse> {
+export async function analyzeRepo(owner: string, repo: string, team = ''): Promise<AnalyzeResponse> {
   try {
     // The free server can take close to a minute to wake up, so allow plenty of time.
-    const res = await axios.post<AnalyzeResponse>(`${API_URL}/analyze`, { owner, repo, timezone: timeZone }, { timeout: 150000 });
+    const res = await axios.post<AnalyzeResponse>(`${API_URL}/analyze`, { owner, repo, timezone: timeZone, team }, { timeout: 150000 });
     return res.data;
   } catch {
     return { success: false, error: "We couldn't reach the server. Check your connection and try again." };
@@ -51,5 +51,54 @@ export async function sendFeedback(body: {
     return true;
   } catch {
     return false;
+  }
+}
+
+// ── Team spaces ──
+// A team is a random id in the page link (?team=...). Its documents replace the samples in reports.
+
+export interface TeamDoc {
+  id: string;
+  title: string;
+  added: string;
+  chunks: number;
+}
+
+type Result<T> = ({ success: true } & T) | { success: false; error: string };
+const offline = { success: false as const, error: "We couldn't reach the server. Check your connection and try again." };
+
+export async function createTeam(): Promise<Result<{ team: string }>> {
+  try {
+    return (await axios.post(`${API_URL}/teams`, {}, { timeout: 90000 })).data;
+  } catch {
+    return offline;
+  }
+}
+
+export async function listTeamDocs(team: string): Promise<Result<{ documents: TeamDoc[] }>> {
+  try {
+    return (await axios.get(`${API_URL}/teams/${team}/documents`, { timeout: 90000 })).data;
+  } catch {
+    return offline;
+  }
+}
+
+export async function addTeamDoc(team: string, input: { title: string; text: string; file: File | null }): Promise<Result<{ document: TeamDoc }>> {
+  const form = new FormData();
+  form.append('title', input.title);
+  form.append('text', input.text);
+  if (input.file) form.append('file', input.file);
+  try {
+    return (await axios.post(`${API_URL}/teams/${team}/documents`, form, { timeout: 120000 })).data;
+  } catch {
+    return offline;
+  }
+}
+
+export async function removeTeamDoc(team: string, docId: string): Promise<Result<{}>> {
+  try {
+    return (await axios.delete(`${API_URL}/teams/${team}/documents/${docId}`, { timeout: 60000 })).data;
+  } catch {
+    return offline;
   }
 }

@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { analyzeRepo, parseRepo, timeZone } from './api';
 import { BrandMark } from './charts';
 import Dashboard from './Dashboard';
 import Feedback from './Feedback';
 import Guide from './Guide';
+import TeamPanel from './TeamPanel';
 import { Analysis } from './types';
 
 const EXAMPLES = ['vercel/swr', 'pallets/flask', 'fastapi/fastapi'];
@@ -31,6 +32,21 @@ export default function App() {
   const [error, setError] = useState('');
   const [result, setResult] = useState<Analysis | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [teamOpen, setTeamOpen] = useState(false);
+  // The team id lives in the link (?team=...) so a team can bookmark and share it.
+  const [team, setTeam] = useState(() => {
+    const id = new URLSearchParams(window.location.search).get('team') || '';
+    return /^[A-Za-z0-9_-]{22}$/.test(id) ? id : '';
+  });
+  const [teamDocs, setTeamDocs] = useState(0);
+
+  const changeTeam = useCallback((id: string) => {
+    setTeam(id);
+    const url = new URL(window.location.href);
+    url.searchParams.set('team', id);
+    window.history.replaceState(null, '', url.toString());
+    setResult(null);
+  }, []);
 
   useEffect(() => {
     if (!loading) return;
@@ -50,7 +66,7 @@ export default function App() {
     setResult(null);
     setSeconds(0);
     setLoading(true);
-    const res = await analyzeRepo(parsed.owner, parsed.repo);
+    const res = await analyzeRepo(parsed.owner, parsed.repo, team);
     setLoading(false);
     if (res.success) setResult(res);
     else setError(res.error);
@@ -69,6 +85,13 @@ export default function App() {
             <input id="repo" value={input} onChange={(e) => setInput(e.target.value)} placeholder="owner/repository" autoComplete="off" spellCheck={false} />
             <button className="btn" type="submit" disabled={loading}>{loading ? 'Analyzing...' : 'Analyze'}</button>
           </form>
+          <button type="button" className="guide-open team-open" onClick={() => setTeamOpen(true)}>
+            <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M4 2.5h8l4 4v11H4z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+              <path d="M7 10h6M7 13h6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+            Your team's history{team && teamDocs > 0 ? ` (${teamDocs})` : ''}
+          </button>
           <button type="button" className="guide-open" onClick={() => setGuideOpen(true)}>
             <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true">
               <circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
@@ -107,12 +130,13 @@ export default function App() {
 
         {result && (
           <>
-            <Dashboard data={result} />
+            <Dashboard data={result} onAddHistory={() => setTeamOpen(true)} />
             <Feedback owner={result.owner} repo={result.repo} traceId={result.trace_id} />
           </>
         )}
 
         <Guide open={guideOpen} onClose={() => setGuideOpen(false)} timeZone={timeZone} />
+        <TeamPanel open={teamOpen} onClose={() => setTeamOpen(false)} team={team} onTeamChange={changeTeam} onDocsChange={setTeamDocs} />
 
         <footer className="foot">
           <span>Built by Abirami Thiyagarajan</span>
