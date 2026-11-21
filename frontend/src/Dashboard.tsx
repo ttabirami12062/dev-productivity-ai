@@ -144,6 +144,11 @@ export default function Dashboard({ data, onAddHistory, team }: { data: Analysis
             </b>
             <span className="flow-note">merged PRs nobody else reviewed</span>
           </div>
+          <div className="flow-item">
+            <span className="flow-label">Waiting for a first look</span>
+            <b className={(m.prs.waiting_first_review ?? 0) >= 5 ? 'up-bad' : undefined}>{m.prs.waiting_first_review ?? 0}</b>
+            <span className="flow-note">open PRs over 24 hours with no review yet</span>
+          </div>
           {m.prs.size?.median_lines != null && (
             <div className="flow-item">
               <span className="flow-label">Typical PR size</span>
@@ -175,11 +180,6 @@ export default function Dashboard({ data, onAddHistory, team }: { data: Analysis
               </span>
             </div>
           )}
-          <div className="flow-item">
-            <span className="flow-label">Waiting for a first look</span>
-            <b className={(m.prs.waiting_first_review ?? 0) >= 5 ? 'up-bad' : undefined}>{m.prs.waiting_first_review ?? 0}</b>
-            <span className="flow-note">open PRs over 24 hours with no review yet</span>
-          </div>
         </section>
       )}
 
