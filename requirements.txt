@@ -13,3 +13,4 @@ langfuse==5.2.0
 pydantic==2.14.4
 python-multipart==0.0.34
 tzdata==2026.6
+pypdf==7.1.1

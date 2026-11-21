@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from html import escape
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
@@ -25,6 +25,7 @@ from src.rag_pipeline import retrieve_history
 from src.observability import record_feedback, report_trace
 from src.citation_check import numbers_grounded
 from src.report_generator import team_data_text
+from src.team_docs import TeamDocError, add_document, delete_document, is_team_id, list_documents, new_team_id, text_from_file
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("api")
@@ -37,7 +38,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",")],
     allow_credentials=False,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["*"],
 )
 
@@ -45,6 +46,9 @@ app.add_middleware(
 # last result for an hour, and each visitor gets a handful of fresh analyses per hour.
 CACHE_SECONDS = 3600
 HOURLY_LIMIT = int(os.getenv("HOURLY_LIMIT", "8"))
+# Adding a document costs an embedding call, so uploads get their own hourly limit.
+UPLOAD_HOURLY_LIMIT = int(os.getenv("UPLOAD_HOURLY_LIMIT", "20"))
+_uploads_by_ip = {}
 # A spending cap that doesn't depend on OpenAI's dashboard: at most this many new
 # reports per day across all visitors (measured in Langfuse at about $0.0025 each,
 # so 300 is about $0.75 and 80 is about $0.20).
@@ -101,6 +105,8 @@ class AnalyzeRequest(BaseModel):
     # The visitor's time zone from their browser, e.g. "America/Chicago", so weeks
     # and dates match what they see on GitHub.
     timezone: str = Field("UTC", max_length=64)
+    # A team space id from the team's private link; its documents replace the samples.
+    team: str = Field("", max_length=40)
 
 
 def _zone(name):
@@ -127,14 +133,16 @@ def _client_ip(request):
     return forwarded.split(",")[0].strip() or (request.client.host if request.client else "unknown")
 
 
-def _over_limit(ip):
+def _over_limit(ip, log_by_ip=None, limit=None):
+    log_by_ip = _requests_by_ip if log_by_ip is None else log_by_ip
+    limit = HOURLY_LIMIT if limit is None else limit
     now = time.time()
     with _lock:
-        recent = [t for t in _requests_by_ip.get(ip, []) if now - t < 3600]
-        if len(recent) >= HOURLY_LIMIT:
-            _requests_by_ip[ip] = recent
+        recent = [t for t in log_by_ip.get(ip, []) if now - t < 3600]
+        if len(recent) >= limit:
+            log_by_ip[ip] = recent
             return True
-        _requests_by_ip[ip] = recent + [now]
+        log_by_ip[ip] = recent + [now]
         return False
 
 
@@ -161,7 +169,8 @@ def analyze(body: AnalyzeRequest, request: Request):
         return _fail("That doesn't look like a GitHub repository. Use the form owner/name, for example vercel/swr.")
 
     tz = _zone(body.timezone)
-    key = f"{owner}/{repo}@{tz}".lower()
+    team = body.team if is_team_id(body.team) else ""
+    key = f"{owner}/{repo}@{tz}#{team}".lower()
     cached = _cache.get(key)
     if cached and time.time() - cached[0] < CACHE_SECONDS:
         return {**cached[1], "cached": True}
@@ -180,7 +189,10 @@ def analyze(body: AnalyzeRequest, request: Request):
             score, signals = calculate_health_score(metrics)
 
             try:
-                history = retrieve_history(signals)
+                # A team's own documents come first; teams that haven't added any yet get the samples.
+                history = retrieve_history(signals, namespace=team) if team else []
+                if not history:
+                    history = retrieve_history(signals)
             except Exception:
                 # A report without history is still useful, so don't fail the whole analysis.
                 log.exception("History search failed")
@@ -218,7 +230,8 @@ def analyze(body: AnalyzeRequest, request: Request):
         "signals": signals,
         "metrics": metrics,
         "report": report,
-        "sources": [{"id": i, "title": h["title"], "match": h["match"]} for i, h in enumerate(history, start=1)],
+        "sources": [{"id": i, "title": h["title"], "match": h["match"], "kind": h.get("kind", "sample")}
+                    for i, h in enumerate(history, start=1)],
         "generated_seconds": round(time.time() - started, 1),
         "usage": usage,
         "checks": {"numbers_grounded": grounded, "unsupported_numbers": unsupported},
@@ -247,6 +260,58 @@ def submit_review(request: ReviewRequest):
         log.exception("Could not record feedback in Langfuse")
     send_email(review)
     return {"success": True, "message": "Review submitted!"}
+
+@app.post("/teams")
+def create_team(request: Request):
+    if _over_limit(_client_ip(request), _uploads_by_ip, UPLOAD_HOURLY_LIMIT):
+        return _fail("Too many changes in the last hour. Please try again a little later.")
+    return {"success": True, "team": new_team_id()}
+
+
+@app.get("/teams/{team}/documents")
+def team_documents(team: str):
+    if not is_team_id(team):
+        return _fail("That team link isn't valid. Check you copied all of it.")
+    return {"success": True, "documents": list_documents(team)}
+
+
+@app.post("/teams/{team}/documents")
+async def add_team_document(team: str, request: Request, title: str = Form(""), text: str = Form(""),
+                            file: UploadFile | None = File(None)):
+    if not is_team_id(team):
+        return _fail("That team link isn't valid. Check you copied all of it.")
+    if _over_limit(_client_ip(request), _uploads_by_ip, UPLOAD_HOURLY_LIMIT):
+        return _fail("Too many uploads in the last hour. Please try again a little later.")
+    try:
+        if file is not None and file.filename:
+            text = text_from_file(file.filename, await file.read(2_000_001))
+            # A short first line ("POSTMORTEM: Search outage, May 2025") beats the file name.
+            first_line = next((line.strip() for line in text.splitlines() if line.strip()), "")
+            title = title or (first_line if len(first_line) <= 100 else "") or os.path.splitext(file.filename)[0].replace("_", " ").replace("-", " ")
+        doc = add_document(team, title, text)
+    except TeamDocError as e:
+        return _fail(str(e))
+    except Exception:
+        log.exception("Adding a team document failed")
+        return _fail("Something went wrong saving that document. Please try again in a minute.")
+    # Cached reports for this team were written without the new document.
+    for key in [k for k in _cache if k.endswith(f"#{team.lower()}")]:
+        _cache.pop(key, None)
+    return {"success": True, "document": doc}
+
+
+@app.delete("/teams/{team}/documents/{doc_id}")
+def remove_team_document(team: str, doc_id: str):
+    if not is_team_id(team):
+        return _fail("That team link isn't valid. Check you copied all of it.")
+    try:
+        delete_document(team, doc_id)
+    except TeamDocError as e:
+        return _fail(str(e))
+    for key in [k for k in _cache if k.endswith(f"#{team.lower()}")]:
+        _cache.pop(key, None)
+    return {"success": True}
+
 
 @app.get("/health")
 async def health():

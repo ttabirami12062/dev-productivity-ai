@@ -32,6 +32,10 @@ def _index():
     return pc.Index(INDEX_NAME)
 
 
+def split_text(documents):
+    return RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100).split_documents(documents)
+
+
 def _title_for(path, text):
     # The first line of each document is its title, e.g. "INCIDENT REPORT - MARCH 2024".
     first = text.strip().splitlines()[0] if text.strip() else os.path.basename(path)
@@ -54,7 +58,7 @@ def build_index():
             path = os.path.join(DOCS_PATH, name)
             with open(path, encoding="utf-8") as f:
                 documents.append(Document(page_content=f.read(), metadata={"source": path}))
-    chunks = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100).split_documents(documents)
+    chunks = split_text(documents)
     titles = {d.metadata["source"]: _title_for(d.metadata["source"], d.page_content) for d in documents}
 
     texts = [c.page_content for c in chunks]
@@ -74,14 +78,15 @@ def build_index():
 
 
 @retriever
-def retrieve_history(signals, k=4):
+def retrieve_history(signals, k=4, namespace=""):
     """Finds the past incidents and retros most like this week's signals.
 
     Returns one entry per source document (best-matching chunk), each with a match score,
     so the report can cite "[1] Payments outage report, 89% match".
     """
     query = " ".join(signals) if signals else "Healthy team, fast reviews, balanced workload."
-    results = _index().query(vector=_embeddings().embed_query(query), top_k=k, include_metadata=True)
+    # namespace "" holds the sample documents; each team's documents live in their own namespace.
+    results = _index().query(vector=_embeddings().embed_query(query), top_k=k, include_metadata=True, namespace=namespace)
 
     by_source = {}
     for match in results.matches:
@@ -93,6 +98,7 @@ def retrieve_history(signals, k=4):
                 "source": source,
                 "text": meta.get("text", ""),
                 "match": round(match.score * 100),
+                "kind": "team" if namespace else "sample",
             }
         else:
             by_source[source]["text"] += "\n" + meta.get("text", "")
