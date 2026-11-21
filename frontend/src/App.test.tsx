@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import App from './App';
 import { parseRepo } from './api';
 
-jest.mock('axios', () => ({ post: jest.fn() }));
+vi.mock('axios', () => ({ default: { post: vi.fn(), get: vi.fn(), delete: vi.fn() } }));
 
 test('shows the intro and example repositories before any analysis', () => {
   render(<App />);

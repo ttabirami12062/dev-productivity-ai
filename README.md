@@ -111,7 +111,7 @@ Before going live, the pipeline was also tested against twelve real projects, in
 
 | Layer | Technology |
 |---|---|
-| Frontend | React and TypeScript, hand-drawn SVG charts, hosted on Vercel |
+| Frontend | React and TypeScript built with Vite, hand-drawn SVG charts, tested with Vitest, hosted on Vercel |
 | Backend | Python 3.12, FastAPI, hosted on Render |
 | Data | GitHub REST API |
 | Retrieval | Pinecone serverless index, OpenAI `text-embedding-ada-002` embeddings through LangChain, LangChain text splitting |
@@ -164,12 +164,12 @@ cp .env.example .env          # then fill in your keys
 # Frontend, in a second terminal
 cd frontend
 npm install
-REACT_APP_API_URL=http://localhost:8000 npm start
+VITE_API_URL=http://localhost:8000 npm run dev    # opens on http://localhost:3001
 ```
 
 To analyze a repository from the terminal instead: `.venv/bin/python main.py owner/name`
 
-Run the checks with `.venv/bin/python tests/test_metrics.py` (no keys needed) and `.venv/bin/python tests/test_evaluation.py`.
+Run the checks with `.venv/bin/python tests/test_metrics.py` (no keys needed), `cd frontend && npm test` and `.venv/bin/python tests/test_evaluation.py`.
 
 ## Project structure
 

@@ -1,8 +1,8 @@
 import axios from 'axios';
 import { AnalyzeResponse } from './types';
 
-// Set REACT_APP_API_URL in Vercel to point at a different backend; falls back to the Render one.
-export const API_URL = process.env.REACT_APP_API_URL || 'https://dev-productivity-ai.onrender.com';
+// Set VITE_API_URL in Vercel to point at a different backend; falls back to the Render one.
+export const API_URL = import.meta.env.VITE_API_URL || 'https://dev-productivity-ai.onrender.com';
 
 // Accepts "owner/name", "github.com/owner/name" or a full GitHub link.
 export function parseRepo(input: string): { owner: string; repo: string } | null {
