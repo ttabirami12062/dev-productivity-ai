@@ -58,7 +58,8 @@ flowchart LR
 5. **Generate.** The metrics, the reasons and the retrieved documents go to `gpt-5.4-mini`, which returns JSON: a headline, up to two risks, up to two actions and one thing going well, each citing numbered sources. The model is told to use only the numbers it's given.
 6. **Validate.** The response is checked against the expected shape, and any citation pointing to a source that wasn't provided is removed. Every number in the report is then checked against the data and documents the model was given, so an invented or miscalculated figure is flagged on the page and in Langfuse.
 7. **Track over time.** Visitors can track a project. A nightly GitHub Actions job then saves its score and key numbers to Supabase Postgres every day (no AI calls, so it's free), and the dashboard shows the score day by day plus plain comparisons with a month earlier ("Typical wait to merge is 30.5 hours, up from 14 hours last month").
-8. **Trace.** Every analysis is recorded in Langfuse as one trace: the history search, the embedding call and the report generation, each with its latency, token counts and cost, plus the final health score.
+8. **Email weekly.** From its team space, a team can subscribe to a project's report. The address must be confirmed by email first, and every Monday a GitHub Actions job writes one report per project and team (grounded in that team's documents) and emails it, with a one-click unsubscribe that deletes the address.
+9. **Trace.** Every analysis is recorded in Langfuse as one trace: the history search, the embedding call and the report generation, each with its latency, token counts and cost, plus the final health score.
 
 A "How to read this" panel in the app explains every number, chart and label in plain language. The layout also works on phones.
 
@@ -78,6 +79,7 @@ A "How to read this" panel in the app explains every number, chart and label in 
 | Time zone sent by the browser | Mixing UTC and local time moved PRs into the wrong week during testing |
 | One-hour cache, a per-visitor hourly limit and a site-wide daily cap | Keeps API costs predictable on a public demo. Langfuse measures a report at about $0.0025 |
 | History in Supabase, collected by a scheduled GitHub Action | Replaces the planned S3 and Lambda with free tools; the job uses only GitHub data and scoring, never the AI, and its daily run also keeps the free database from pausing |
+| Weekly emails only from a team space, with double opt-in | The report names people. Offering it to anyone would let strangers monitor someone else's team every week, so it's for a team's own project, and nobody can be signed up without clicking a confirmation |
 | A private team link instead of accounts | Teams can bring their own history in one click, recruiters can try it without signing up, and GitHub sign-in can be added on top later |
 | One Pinecone namespace per team, and documents treated as reference only | Teams never see each other's documents, and a document containing instructions ("ignore your rules…") can't steer the report; this was tested with exactly such a document |
 | Visitor ratings stored as Langfuse scores on the report's trace | Feedback survives redeploys (Render's disk doesn't) and sits next to the exact report it rates; names and emails go only to the owner's inbox |
@@ -140,7 +142,7 @@ These are honest gaps, and the next things on the roadmap.
 - [ ] True code churn (lines rewritten soon after being written), which needs per-file history and was left out to keep reports fast
 - [x] Langfuse tracing for latency, tokens and cost per report
 - [x] A second model that checks each cited source actually supports the claim (in CI), plus a number check on every live report
-- [ ] A weekly email report for managers
+- [x] A weekly email report, subscribed from a team space and confirmed by email
 
 ---
 
@@ -184,6 +186,10 @@ dev-productivity-ai/
 │   ├── team_docs.py          # Team spaces: add, list and remove documents per namespace
 │   ├── history.py            # Daily snapshots in Supabase and month-over-month comparisons
 │   ├── snapshots.py          # The nightly job that saves every tracked project
+│   ├── pipeline.py           # Builds one report; shared by the website and the weekly emails
+│   ├── subscriptions.py      # Weekly email subscriptions (confirm, unsubscribe)
+│   ├── mailer.py             # Sends email and lays out the report and confirmation emails
+│   ├── weekly_reports.py     # The Monday job that writes and sends weekly reports
 │   └── observability.py      # Langfuse tracing (off when keys are missing)
 ├── supabase/schema.sql       # Tables for tracked projects and daily snapshots
 ├── documents/                # Sample incident report and retrospective

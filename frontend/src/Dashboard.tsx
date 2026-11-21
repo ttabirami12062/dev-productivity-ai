@@ -1,6 +1,7 @@
 import { Analysis, FindingKind } from './types';
 import { COLORS, Cite, LoadBars, MergeChart, Pulse, Sparkline, statusColor } from './charts';
 import Trends from './Trends';
+import Subscribe from './Subscribe';
 
 // Kept in step with MERGE_TARGET_HOURS and REVIEW_SHARE_LIMIT in src/metrics.py.
 const MERGE_TARGET = 24;
@@ -26,7 +27,7 @@ function Headline({ text, highlight }: { text: string; highlight: string }) {
   );
 }
 
-export default function Dashboard({ data, onAddHistory }: { data: Analysis; onAddHistory: () => void }) {
+export default function Dashboard({ data, onAddHistory, team }: { data: Analysis; onAddHistory: () => void; team: string }) {
   const { metrics: m, report, sources } = data;
   const color = statusColor(data.status);
   // Source 0 is the GitHub data itself; show it after the history documents.
@@ -223,6 +224,7 @@ export default function Dashboard({ data, onAddHistory }: { data: Analysis; onAd
       </div>}
 
       <Trends owner={data.owner} repo={data.repo} />
+      {team && <Subscribe owner={data.owner} repo={data.repo} team={team} />}
 
       <h2 className="section-title">This week's report</h2>
       <p className="section-sub">Written by AI from the numbers above and past incidents. Each claim links to its source.</p>

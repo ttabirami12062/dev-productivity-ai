@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { analyzeRepo, parseRepo, timeZone } from './api';
+import { analyzeRepo, parseRepo, subscriptionAction, timeZone } from './api';
 import { BrandMark } from './charts';
 import Dashboard from './Dashboard';
 import Feedback from './Feedback';
@@ -39,6 +39,7 @@ export default function App() {
     return /^[A-Za-z0-9_-]{22}$/.test(id) ? id : '';
   });
   const [teamDocs, setTeamDocs] = useState(0);
+  const [notice, setNotice] = useState('');
 
   const changeTeam = useCallback((id: string) => {
     setTeam(id);
@@ -54,6 +55,23 @@ export default function App() {
     const t = setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 1000);
     return () => clearInterval(t);
   }, [loading]);
+
+  // Links from emails: ?confirm=..., ?unsubscribe=..., and ?repo=owner/name to open a report directly.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const confirm = params.get('confirm');
+    const unsub = params.get('unsubscribe');
+    const action = confirm ? 'confirm' : unsub ? 'unsubscribe' : null;
+    if (action) {
+      setNotice(action === 'confirm' ? 'Confirming your weekly report...' : 'Unsubscribing...');
+      subscriptionAction(action, (confirm || unsub) as string).then((res) => setNotice(res.success ? res.message : res.error));
+      params.delete(action);
+      window.history.replaceState(null, '', `${window.location.pathname}${params.toString() ? `?${params}` : ''}`);
+    }
+    const repo = params.get('repo');
+    if (repo) run(repo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const run = async (value: string) => {
     const parsed = parseRepo(value);
@@ -102,6 +120,7 @@ export default function App() {
           </button>
         </header>
 
+        {notice && <p className="notice-banner" role="status">{notice}</p>}
         {error && <p className="error banner" role="alert">{error}</p>}
 
         {!result && !loading && (
@@ -130,7 +149,7 @@ export default function App() {
 
         {result && (
           <>
-            <Dashboard data={result} onAddHistory={() => setTeamOpen(true)} />
+            <Dashboard data={result} onAddHistory={() => setTeamOpen(true)} team={team} />
             <Feedback owner={result.owner} repo={result.repo} traceId={result.trace_id} />
           </>
         )}

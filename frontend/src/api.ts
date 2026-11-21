@@ -136,3 +136,21 @@ export async function trackRepo(owner: string, repo: string): Promise<Result<{}>
     return offline;
   }
 }
+
+// ── Weekly email subscriptions (only from a team space) ──
+
+export async function subscribeWeekly(body: { email: string; owner: string; repo: string; team: string }): Promise<Result<{ message: string }>> {
+  try {
+    return (await axios.post(`${API_URL}/subscriptions`, { ...body, timezone: timeZone }, { timeout: 120000 })).data;
+  } catch {
+    return offline;
+  }
+}
+
+export async function subscriptionAction(action: 'confirm' | 'unsubscribe', token: string): Promise<Result<{ message: string }>> {
+  try {
+    return (await axios.post(`${API_URL}/subscriptions/${action}`, { token }, { timeout: 90000 })).data;
+  } catch {
+    return offline;
+  }
+}
