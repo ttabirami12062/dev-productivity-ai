@@ -6,17 +6,28 @@ Dev Productivity AI reads a GitHub repository's last six weeks, finds those warn
 
 **Try it:** [dev-productivity-ai.vercel.app](https://dev-productivity-ai.vercel.app). Enter any public repository, for example `tailwindlabs/tailwindcss`.
 
-![Dashboard for tailwindlabs/tailwindcss: score 50, at risk, with merge time rising to 5.3 days and one reviewer doing 81% of reviews](docs/screenshots/dashboard-top.png)
+![A 20-second walkthrough: typing tailwindlabs/tailwindcss, the health score and warning signs appearing, the charts, the cited weekly report, and the How to read this guide](docs/demo.gif)
+
+**What you get**
+
+- A **health score** out of 100, with a plain reason for every point lost
+- **Eleven signals** from six weeks of GitHub activity: time to merge, time to first review, cycle time, review load, unreviewed merges, PRs waiting for a first look, stuck PRs, PR size, files that keep needing fixes, commit concentration and after-hours work
+- A **weekly report** written by AI, where every claim links to its source and every number is checked against the data
+- **Your team's own history**: add incident reports and retros, and reports cite them instead of samples
+- **Trends over time** for tracked projects, with comparisons to last month
+- **A Monday email** for your team's project, with one-click unsubscribe
 
 ---
 
 ## What it found in a real project
 
-Analysis of `tailwindlabs/tailwindcss`, six weeks ending November 20, 2026:
+Analysis of `tailwindlabs/tailwindcss`, six weeks ending November 20, 2026 (health score 40, at risk):
 
 - The typical wait to merge a pull request rose from **7.4 hours to 5.3 days** in the latest week.
-- **36 pull requests** had been open for more than three days.
-- **One maintainer did 25 of the last 31 reviews (81%).**
+- A new PR waited **46.8 hours** before anyone else reviewed it, and **34 open PRs** were still waiting for a first look.
+- **One maintainer did 81% of all reviews.**
+
+![Dashboard for tailwindlabs/tailwindcss: score 40, at risk, with merge time rising to 5.3 days, 46.8 hours to a first review and one reviewer doing 81% of reviews](docs/screenshots/dashboard-top.png)
 
 That combination, slow merges plus one overloaded reviewer, is the pattern the tool exists to catch. The report recommended spreading reviews across more people and setting a 24-hour review target, and cited the past incident each step came from:
 
@@ -94,9 +105,11 @@ A "How to read this" panel in the app explains every number, chart and label in 
 
 ## Quality checks
 
-Every push runs two checks in GitHub Actions:
+Every push runs these checks in GitHub Actions:
 
 - **Scoring tests** (`tests/test_metrics.py`) check the health score math on hand-built data with no API calls: solo projects, overloaded reviewers, duplicate reviews, quiet repositories and repositories without pull requests.
+- **History and email tests** (`tests/test_history.py`, `tests/test_emails.py`) check month-over-month comparisons, that emails escape everything from GitHub or the AI, and that every report email carries its unsubscribe link.
+- **Frontend tests** (`frontend`, with Vitest) check the page loads and that repository names and GitHub links are understood.
 - **Upload tests** (`tests/test_team_docs.py`) check that team links are long and random, and that wrong file types, oversized files and broken PDFs get clear messages.
 - **Number detector tests** (`tests/test_citation_check.py`) confirm the number check passes real figures and catches invented ones (a made-up "57%") and miscalculated ones ("6.1 days").
 - **Report evaluation** (`tests/test_evaluation.py`) generates reports for a golden dataset of six team scenarios (an overloaded reviewer, a healthy team, a PR backlog, a solo maintainer, a nearly inactive repo and a project with pull requests switched off) and checks that each has a headline and the required finding types, raises no risks for a healthy team, cites only sources that exist, uses only numbers found in its inputs, and mentions the key topic. A second model then acts as a judge, reading each finding next to the sources it cites and deciding whether they support it. The build fails if fewer than 80% of reports pass or fewer than 90% of cited findings are supported.
@@ -113,12 +126,13 @@ Before going live, the pipeline was also tested against twelve real projects, in
 |---|---|
 | Frontend | React and TypeScript built with Vite, hand-drawn SVG charts, tested with Vitest, hosted on Vercel |
 | Backend | Python 3.12, FastAPI, hosted on Render |
-| Data | GitHub REST API |
+| Data | GitHub GraphQL API |
 | Retrieval | Pinecone serverless index, OpenAI `text-embedding-ada-002` embeddings through LangChain, LangChain text splitting |
 | Generation | OpenAI `gpt-5.4-mini` with JSON output |
 | History | Supabase Postgres, written by a nightly GitHub Actions job |
 | Observability | Langfuse traces for each report (retrieval, embedding and generation steps) |
-| CI | GitHub Actions: scoring tests, report evaluation, and the keep-awake job |
+| Email | Gmail with an app password; confirmation and weekly report emails with List-Unsubscribe headers |
+| Automation | GitHub Actions: quality checks on every push, nightly snapshots, Monday emails, and a keep-awake check every 10 minutes |
 
 ---
 
@@ -131,6 +145,8 @@ These are honest gaps, and the next things on the roadmap.
 - **History starts when tracking starts.** Trends build up one point per night from the day a project is tracked; past months aren't reconstructed. The demo tracks at most 50 projects.
 - **Sampling on busy repositories.** At most 300 PRs and 300 commits are read; when a project has more, the dashboard shows the totals as "300+". Reviews are counted on every PR merged in the six weeks.
 - **Public repositories only.** Private repositories would need a GitHub App with read-only, per-repository access, plus login and per-company data separation.
+- **Report time on busy projects.** A fresh report takes a few seconds for small projects and 10 to 30 seconds for very busy ones on the free Render server; repeats within an hour are instant.
+- **Email deliverability.** Emails go through a personal Gmail account, so some land in spam. A sending service on its own domain would fix that.
 
 ## Roadmap
 
@@ -143,8 +159,13 @@ These are honest gaps, and the next things on the roadmap.
 - [x] Langfuse tracing for latency, tokens and cost per report
 - [x] A second model that checks each cited source actually supports the claim (in CI), plus a number check on every live report
 - [x] A weekly email report, subscribed from a team space and confirmed by email
+- [ ] Sign in with GitHub, then private repositories through a GitHub App
 
 ---
+
+## What changed
+
+The [changelog](CHANGELOG.md) tells the story of the November 2026 rebuild in plain language: what was broken, what was fixed, and why each feature works the way it does.
 
 ## Run it yourself
 
@@ -167,6 +188,12 @@ npm install
 VITE_API_URL=http://localhost:8000 npm run dev    # opens on http://localhost:3001
 ```
 
+Optional extras, each switched off until its keys are set in `.env`:
+
+- **Trends and weekly emails:** create a free Supabase project, run `supabase/schema.sql` in its SQL editor, and set `SUPABASE_URL` and `SUPABASE_SERVICE_KEY`. Emails also need `GMAIL_ADDRESS` and a Gmail `GMAIL_APP_PASSWORD`.
+- **Tracing:** set the Langfuse keys and `LANGFUSE_BASE_URL`.
+- **Scheduled jobs:** the nightly snapshots and Monday emails run in GitHub Actions and read the same values from the repository's Actions secrets.
+
 To analyze a repository from the terminal instead: `.venv/bin/python main.py owner/name`
 
 Run the checks with `.venv/bin/python tests/test_metrics.py` (no keys needed), `cd frontend && npm test` and `.venv/bin/python tests/test_evaluation.py`.
@@ -175,7 +202,7 @@ Run the checks with `.venv/bin/python tests/test_metrics.py` (no keys needed), `
 
 ```
 dev-productivity-ai/
-├── api.py                    # FastAPI app: /analyze, /review, /health, caching and limits
+├── api.py                    # FastAPI app: analysis, teams, tracking, history, subscriptions, feedback; caching and limits
 ├── main.py                   # Same analysis from the command line
 ├── src/
 │   ├── github_client.py      # Fetches six weeks of PRs, commits and reviews
@@ -191,12 +218,12 @@ dev-productivity-ai/
 │   ├── mailer.py             # Sends email and lays out the report and confirmation emails
 │   ├── weekly_reports.py     # The Monday job that writes and sends weekly reports
 │   └── observability.py      # Langfuse tracing (off when keys are missing)
-├── supabase/schema.sql       # Tables for tracked projects and daily snapshots
+├── supabase/schema.sql       # Tables for tracked projects, daily snapshots and subscriptions
 ├── documents/                # Sample incident report and retrospective
-├── tests/                    # Scoring tests, golden dataset and report evaluation
-├── frontend/                 # React and TypeScript dashboard
-├── docs/screenshots/
-└── .github/workflows/        # Quality checks and the keep-awake job
+├── tests/                    # Offline tests, golden dataset and report evaluation
+├── frontend/                 # React and TypeScript dashboard (Vite)
+├── docs/                     # Demo GIF and screenshots
+└── .github/workflows/        # Quality checks, nightly snapshots, Monday emails, keep-awake
 ```
 
 ---
