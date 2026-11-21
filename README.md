@@ -55,7 +55,8 @@ flowchart LR
 4. **Retrieve.** The warning signs are embedded and searched against a Pinecone index of past incident reports and sprint retrospectives. Each match comes back with a similarity score that's shown to the user. A team can create a private team space and add its own incident reports, retros and postmortems (pasted, or as .txt, .md or .pdf files); each team gets its own Pinecone namespace, and reports run from the team's link search only that team's documents, marked "Your team's document".
 5. **Generate.** The metrics, the reasons and the retrieved documents go to `gpt-5.4-mini`, which returns JSON: a headline, up to two risks, up to two actions and one thing going well, each citing numbered sources. The model is told to use only the numbers it's given.
 6. **Validate.** The response is checked against the expected shape, and any citation pointing to a source that wasn't provided is removed. Every number in the report is then checked against the data and documents the model was given, so an invented or miscalculated figure is flagged on the page and in Langfuse.
-7. **Trace.** Every analysis is recorded in Langfuse as one trace: the history search, the embedding call and the report generation, each with its latency, token counts and cost, plus the final health score.
+7. **Track over time.** Visitors can track a project. A nightly GitHub Actions job then saves its score and key numbers to Supabase Postgres every day (no AI calls, so it's free), and the dashboard shows the score day by day plus plain comparisons with a month earlier ("Typical wait to merge is 30.5 hours, up from 14 hours last month").
+8. **Trace.** Every analysis is recorded in Langfuse as one trace: the history search, the embedding call and the report generation, each with its latency, token counts and cost, plus the final health score.
 
 A "How to read this" panel in the app explains every number, chart and label in plain language. The layout also works on phones.
 
@@ -74,6 +75,7 @@ A "How to read this" panel in the app explains every number, chart and label in 
 | A reason for every point deducted | Managers can see why the score moved, and disagree with it if they want |
 | Time zone sent by the browser | Mixing UTC and local time moved PRs into the wrong week during testing |
 | One-hour cache, a per-visitor hourly limit and a site-wide daily cap | Keeps API costs predictable on a public demo. Langfuse measures a report at about $0.0025 |
+| History in Supabase, collected by a scheduled GitHub Action | Replaces the planned S3 and Lambda with free tools; the job uses only GitHub data and scoring, never the AI, and its daily run also keeps the free database from pausing |
 | A private team link instead of accounts | Teams can bring their own history in one click, recruiters can try it without signing up, and GitHub sign-in can be added on top later |
 | One Pinecone namespace per team, and documents treated as reference only | Teams never see each other's documents, and a document containing instructions ("ignore your rules…") can't steer the report; this was tested with exactly such a document |
 | Visitor ratings stored as Langfuse scores on the report's trace | Feedback survives redeploys (Render's disk doesn't) and sits next to the exact report it rates; names and emails go only to the owner's inbox |
@@ -109,6 +111,7 @@ Before going live, the pipeline was also tested against twelve real projects, in
 | Data | GitHub REST API |
 | Retrieval | Pinecone serverless index, OpenAI `text-embedding-ada-002` embeddings through LangChain, LangChain text splitting |
 | Generation | OpenAI `gpt-5.4-mini` with JSON output |
+| History | Supabase Postgres, written by a nightly GitHub Actions job |
 | Observability | Langfuse traces for each report (retrieval, embedding and generation steps) |
 | CI | GitHub Actions: scoring tests, report evaluation, and the keep-awake job |
 
@@ -120,14 +123,14 @@ These are honest gaps, and the next things on the roadmap.
 
 - **Sample history by default.** Without a team space, reports compare a project with two example documents about a fictional team, and the dashboard labels them "Sample". Team spaces replace them with the team's own documents.
 - **Team links, not accounts.** Anyone with a team's link can see and change its documents, like an "anyone with the link" share. Uploaded text also appears in the owner's Langfuse traces, so the app asks people not to upload anything confidential.
-- **No stored history.** Each analysis covers six weeks fetched live, so there are no month-over-month trends yet.
+- **History starts when tracking starts.** Trends build up one point per night from the day a project is tracked; past months aren't reconstructed. The demo tracks at most 50 projects.
 - **Sampling on busy repositories.** At most 300 PRs and 300 commits are read; when a project has more, the dashboard shows the totals as "300+". Reviews are counted on every PR merged in the six weeks.
 - **Public repositories only.** Private repositories would need a GitHub App with read-only, per-repository access, plus login and per-company data separation.
 
 ## Roadmap
 
 - [x] Teams upload their own incident reports and retrospectives, stored in a separate Pinecone namespace per team
-- [ ] Store weekly snapshots in Postgres, collected by a nightly job, for long-term trends
+- [x] Store daily snapshots in Postgres, collected by a nightly job, with month-over-month comparisons
 - [ ] More signals: cycle time from first commit, time to first review, code churn, files with repeated bug fixes, after-hours work in each contributor's time zone
 - [x] Langfuse tracing for latency, tokens and cost per report
 - [x] A second model that checks each cited source actually supports the claim (in CI), plus a number check on every live report
@@ -173,7 +176,10 @@ dev-productivity-ai/
 │   ├── report_generator.py   # Prompt and JSON report
 │   ├── citation_check.py     # Number check (live) and citation judge (CI)
 │   ├── team_docs.py          # Team spaces: add, list and remove documents per namespace
+│   ├── history.py            # Daily snapshots in Supabase and month-over-month comparisons
+│   ├── snapshots.py          # The nightly job that saves every tracked project
 │   └── observability.py      # Langfuse tracing (off when keys are missing)
+├── supabase/schema.sql       # Tables for tracked projects and daily snapshots
 ├── documents/                # Sample incident report and retrospective
 ├── tests/                    # Scoring tests, golden dataset and report evaluation
 ├── frontend/                 # React and TypeScript dashboard

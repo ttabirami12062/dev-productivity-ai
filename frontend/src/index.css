@@ -250,3 +250,11 @@ a.cite:hover { background: var(--accent); color: #fff; }
 .source-kind { display: table; font: 600 10px var(--mono); letter-spacing: 0.04em; text-transform: uppercase; border-radius: 4px; padding: 1px 5px; margin: 2px 6px 2px 0; }
 .source-kind.team { color: var(--accent); background: var(--accent-soft); }
 .source-kind.sample { color: var(--ink-3); background: #ECEFEB; }
+
+/* trend over time */
+.trend-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.trend-empty p { margin: 0; color: var(--ink-2); max-width: 70ch; }
+.changes { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.changes li { padding: 8px 12px 8px 14px; border-radius: 8px; font-size: 14px; border-left: 4px solid; }
+.changes li.worse { background: var(--bad-soft); border-color: var(--bad); color: #7A231C; }
+.changes li.better { background: var(--good-soft); border-color: var(--good); color: #1B5E35; }

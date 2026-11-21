@@ -102,3 +102,37 @@ export async function removeTeamDoc(team: string, docId: string): Promise<Result
     return offline;
   }
 }
+
+// ── History (daily snapshots of tracked repos) ──
+
+export interface Snapshot {
+  day: string;
+  health_score: number;
+  status: string;
+  median_merge_hours: number | null;
+  latest_week_hours: number | null;
+  top_review_share: number | null;
+  stale_open_prs: number;
+}
+
+export interface Change {
+  label: string;
+  text: string;
+  worse: boolean;
+}
+
+export async function getHistory(owner: string, repo: string): Promise<Result<{ enabled: boolean; tracked: boolean; snapshots: Snapshot[]; changes: Change[] }>> {
+  try {
+    return (await axios.get(`${API_URL}/history/${owner}/${repo}`, { timeout: 60000 })).data;
+  } catch {
+    return offline;
+  }
+}
+
+export async function trackRepo(owner: string, repo: string): Promise<Result<{}>> {
+  try {
+    return (await axios.post(`${API_URL}/track`, { owner, repo }, { timeout: 120000 })).data;
+  } catch {
+    return offline;
+  }
+}

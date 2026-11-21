@@ -1,5 +1,6 @@
 import { Analysis, FindingKind } from './types';
 import { COLORS, Cite, LoadBars, MergeChart, Pulse, Sparkline, statusColor } from './charts';
+import Trends from './Trends';
 
 // Kept in step with MERGE_TARGET_HOURS and REVIEW_SHARE_LIMIT in src/metrics.py.
 const MERGE_TARGET = 24;
@@ -160,6 +161,8 @@ export default function Dashboard({ data, onAddHistory }: { data: Analysis; onAd
           )}
         </div>
       </div>}
+
+      <Trends owner={data.owner} repo={data.repo} />
 
       <h2 className="section-title">This week's report</h2>
       <p className="section-sub">Written by AI from the numbers above and past incidents. Each claim links to its source.</p>
