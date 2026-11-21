@@ -5,36 +5,210 @@
       "scenario": "Slow merges with one overloaded reviewer",
       "people": 3,
       "median_merge_hours": 52.0,
-      "weekly_hours": [14, 16, 19, 27, 38, 52],
-      "open": 4, "stale_open": 3,
-      "reviews": {"Alice": 16, "Bob": 2, "Charlie": 2},
-      "commits": {"Alice": 12, "Bob": 6, "Charlie": 4},
-      "expect_kinds": ["risk", "action", "positive"],
-      "expected_keywords": ["review", "alice"]
+      "weekly_hours": [
+        14,
+        16,
+        19,
+        27,
+        38,
+        52
+      ],
+      "open": 4,
+      "stale_open": 3,
+      "reviews": {
+        "Alice": 16,
+        "Bob": 2,
+        "Charlie": 2
+      },
+      "commits": {
+        "Alice": 12,
+        "Bob": 6,
+        "Charlie": 4
+      },
+      "expect_kinds": [
+        "risk",
+        "action",
+        "positive"
+      ],
+      "expected_keywords": [
+        "review",
+        "alice"
+      ]
     },
     {
       "id": 2,
       "scenario": "Healthy team with balanced workload",
       "people": 3,
       "median_merge_hours": 9.0,
-      "weekly_hours": [10, 8, 9, 11, 9, 8],
-      "open": 2, "stale_open": 0,
-      "reviews": {"Alice": 7, "Bob": 6, "Charlie": 7},
-      "commits": {"Alice": 10, "Bob": 10, "Charlie": 10},
-      "expect_kinds": ["positive"],
-      "expected_keywords": ["review"]
+      "weekly_hours": [
+        10,
+        8,
+        9,
+        11,
+        9,
+        8
+      ],
+      "open": 2,
+      "stale_open": 0,
+      "reviews": {
+        "Alice": 7,
+        "Bob": 6,
+        "Charlie": 7
+      },
+      "commits": {
+        "Alice": 10,
+        "Bob": 10,
+        "Charlie": 10
+      },
+      "expect_kinds": [
+        "positive"
+      ],
+      "expected_keywords": [
+        "review"
+      ]
     },
     {
       "id": 3,
       "scenario": "Many PRs left open for days",
       "people": 3,
       "median_merge_hours": 36.0,
-      "weekly_hours": [20, 24, 30, 33, 35, 36],
-      "open": 10, "stale_open": 7,
-      "reviews": {"Alice": 8, "Bob": 7, "Charlie": 5},
-      "commits": {"Alice": 12, "Bob": 8, "Charlie": 5},
-      "expect_kinds": ["risk", "action", "positive"],
-      "expected_keywords": ["open"]
+      "weekly_hours": [
+        20,
+        24,
+        30,
+        33,
+        35,
+        36
+      ],
+      "open": 10,
+      "stale_open": 7,
+      "reviews": {
+        "Alice": 8,
+        "Bob": 7,
+        "Charlie": 5
+      },
+      "commits": {
+        "Alice": 12,
+        "Bob": 8,
+        "Charlie": 5
+      },
+      "expect_kinds": [
+        "risk",
+        "action",
+        "positive"
+      ],
+      "expected_keywords": [
+        "open"
+      ]
+    },
+    {
+      "id": 4,
+      "scenario": "Solo maintainer, healthy pace",
+      "people": 1,
+      "median_merge_hours": 2.0,
+      "weekly_hours": [
+        1,
+        2,
+        3,
+        2,
+        1,
+        2
+      ],
+      "open": 1,
+      "stale_open": 0,
+      "reviews": {},
+      "commits": {
+        "abi": 25
+      },
+      "expect_kinds": [
+        "positive"
+      ],
+      "forbid_kinds": [
+        "risk"
+      ],
+      "expected_keywords": [],
+      "forbidden_keywords": [
+        "concentrat",
+        "overload",
+        "bus factor",
+        "single point"
+      ]
+    },
+    {
+      "id": 5,
+      "scenario": "Almost no activity in six weeks",
+      "people": 1,
+      "median_merge_hours": null,
+      "weekly_hours": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "open": 0,
+      "stale_open": 0,
+      "reviews": {},
+      "commits": {
+        "abi": 2
+      },
+      "quiet": true,
+      "expect_kinds": [
+        "positive"
+      ],
+      "forbid_kinds": [
+        "risk",
+        "action"
+      ],
+      "expected_keywords": [],
+      "forbidden_keywords": [],
+      "expected_any": [
+        "activity",
+        "too little",
+        "not enough",
+        "quiet",
+        "little recent"
+      ]
+    },
+    {
+      "id": 6,
+      "scenario": "Project with pull requests switched off (judged on commits)",
+      "people": 40,
+      "median_merge_hours": null,
+      "weekly_hours": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "open": 0,
+      "stale_open": 0,
+      "reviews": {},
+      "commits": {
+        "linus": 30,
+        "greg": 20,
+        "others": 150
+      },
+      "uses_prs": false,
+      "total_prs": 0,
+      "expect_kinds": [
+        "positive"
+      ],
+      "forbid_kinds": [],
+      "expected_keywords": [
+        "commit"
+      ],
+      "forbidden_keywords": [
+        "review load",
+        "reviewer",
+        "time to merge",
+        "merge time",
+        "open prs",
+        "stale"
+      ]
     }
   ]
 }

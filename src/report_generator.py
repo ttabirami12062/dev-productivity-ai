@@ -19,7 +19,11 @@ Rules:
   Cite the GitHub data as source 0. Never cite a number that isn't listed.
 - Any claim about this team's current numbers or situation must cite 0. Cite a HISTORY entry only
   for what happened before or the fix it recommends; a finding using both cites both.
-- If HISTORY doesn't fit this team's situation, don't force it in.
+- If HISTORY doesn't fit this team's situation, don't force it in. A past incident "resembles" or
+  "looks like" this week; never say it "exactly matches", and don't carry its details (like who the
+  reviewer was) over to this team.
+- Don't describe trends or qualities the numbers don't show (for example "steady", "senior",
+  "improving") unless TEAM DATA states them.
 - Plain, direct sentences. No filler, no generic advice, no emojis.
 - Write waits of 48 hours or more in days (say "30 days", not "726 hours").
 Reply with JSON only."""
@@ -35,6 +39,9 @@ SHAPE = """{
   ]
 }
 Give up to 2 risks, up to 2 actions and exactly 1 positive.
+The positive must be a plain fact from TEAM DATA (a count, or a number that is within its target),
+never a judgement like "on track" or "balanced" that the numbers don't prove. For a struggling team
+pick the most solid good number, even a small one.
 Only list a risk for something in "What lowered the score". If nothing lowered the score, give no risks:
 a reviewer under the 50% limit or a wait under the 24-hour target is not a risk."""
 
