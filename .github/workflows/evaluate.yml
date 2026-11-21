@@ -34,6 +34,9 @@ jobs:
     - name: Check team document uploads
       run: python tests/test_team_docs.py
 
+    - name: Check month-over-month comparisons
+      run: python tests/test_history.py
+
     # Calls the real model, so it only runs when the OpenAI key secret is set.
     - name: Check report quality against the golden dataset
       if: ${{ env.OPENAI_API_KEY != '' }}

@@ -25,6 +25,7 @@ from src.rag_pipeline import retrieve_history
 from src.observability import record_feedback, report_trace
 from src.citation_check import numbers_grounded
 from src.report_generator import team_data_text
+from src import history as history_store
 from src.team_docs import TeamDocError, add_document, delete_document, is_team_id, list_documents, new_team_id, text_from_file
 
 logging.basicConfig(level=logging.INFO)
@@ -210,6 +211,14 @@ def analyze(body: AnalyzeRequest, request: Request):
             return _fail("Something went wrong on our side while writing the report. Please try again in a minute.")
 
         status = "quiet" if metrics["quiet"] else health_status(score)
+        # Tracked repos get today's numbers saved whenever someone analyzes them, too.
+        tracked = False
+        try:
+            tracked = history_store.is_tracked(activity["owner"], activity["repo"])
+            if tracked:
+                history_store.save_snapshot(activity["owner"], activity["repo"], metrics, score, status, signals)
+        except Exception:
+            log.exception("Saving history failed")
         # Free check on every report: each number the model wrote must come from its inputs.
         grounded, unsupported = numbers_grounded(
             report, team_data_text(activity["owner"], activity["repo"], metrics, score, signals),
@@ -236,6 +245,8 @@ def analyze(body: AnalyzeRequest, request: Request):
         "usage": usage,
         "checks": {"numbers_grounded": grounded, "unsupported_numbers": unsupported},
         "trace_id": record.trace_id,
+        "tracked": tracked,
+        "history_enabled": history_store.ENABLED,
     }
     _cache[key] = (time.time(), result)
     return result
@@ -260,6 +271,46 @@ def submit_review(request: ReviewRequest):
         log.exception("Could not record feedback in Langfuse")
     send_email(review)
     return {"success": True, "message": "Review submitted!"}
+
+class TrackRequest(BaseModel):
+    owner: str = Field(max_length=100)
+    repo: str = Field(max_length=100)
+
+
+@app.post("/track")
+def track_repo(body: TrackRequest, request: Request):
+    """Starts saving a repo's numbers every night. Takes the first snapshot straight away."""
+    owner, repo = body.owner.strip(), body.repo.strip()
+    if not (NAME.match(owner) and NAME.match(repo)):
+        return _fail("That doesn't look like a GitHub repository.")
+    if _over_limit(_client_ip(request), _uploads_by_ip, UPLOAD_HOURLY_LIMIT):
+        return _fail("Too many changes in the last hour. Please try again a little later.")
+    try:
+        activity = fetch_repo_activity(owner, repo)  # also confirms the repo exists and is public
+        history_store.track(activity["owner"], activity["repo"])
+        history_store.snapshot_from_activity(activity)
+    except (GitHubError, history_store.HistoryError) as e:
+        return _fail(str(e))
+    except Exception:
+        log.exception("Tracking %s/%s failed", owner, repo)
+        return _fail("Something went wrong while starting to track this project. Please try again in a minute.")
+    return {"success": True}
+
+
+@app.get("/history/{owner}/{repo}")
+def repo_history(owner: str, repo: str):
+    if not (NAME.match(owner) and NAME.match(repo)):
+        return _fail("That doesn't look like a GitHub repository.")
+    if not history_store.ENABLED:
+        return {"success": True, "enabled": False, "tracked": False, "snapshots": [], "changes": []}
+    try:
+        tracked = history_store.is_tracked(owner, repo)
+        rows = history_store.get_history(owner, repo) if tracked else []
+    except Exception:
+        log.exception("Reading history failed")
+        return _fail("We couldn't load this project's history right now.")
+    return {"success": True, "enabled": True, "tracked": tracked, "snapshots": rows, "changes": history_store.month_over_month(rows)}
+
 
 @app.post("/teams")
 def create_team(request: Request):
