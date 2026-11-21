@@ -122,6 +122,35 @@ export default function Dashboard({ data, onAddHistory }: { data: Analysis; onAd
         </div>
       </section>
 
+      {m.uses_prs && m.prs.median_cycle_hours !== undefined && (
+        <section className="flow" aria-label="How quickly work moves">
+          <div className="flow-item">
+            <span className="flow-label">Time to first review</span>
+            <b className={(m.prs.median_first_review_hours ?? 0) > MERGE_TARGET ? 'up-bad' : undefined}>
+              {m.prs.median_first_review_hours == null ? 'No reviews' : `${wait(m.prs.median_first_review_hours).value}${wait(m.prs.median_first_review_hours).unit}`}
+            </b>
+            <span className="flow-note">from opening a PR to someone else's first review</span>
+          </div>
+          <div className="flow-item">
+            <span className="flow-label">Cycle time</span>
+            <b>{m.prs.median_cycle_hours == null ? 'None' : `${wait(m.prs.median_cycle_hours).value}${wait(m.prs.median_cycle_hours).unit}`}</b>
+            <span className="flow-note">from the first commit to merge, the whole journey</span>
+          </div>
+          <div className="flow-item">
+            <span className="flow-label">Merged without review</span>
+            <b className={!m.solo && m.prs.merged >= 5 && (m.prs.merged_unreviewed ?? 0) / m.prs.merged > 0.5 ? 'up-bad' : undefined}>
+              {m.prs.merged_unreviewed ?? 0} of {m.prs.merged}
+            </b>
+            <span className="flow-note">merged PRs nobody else reviewed</span>
+          </div>
+          <div className="flow-item">
+            <span className="flow-label">Waiting for a first look</span>
+            <b className={(m.prs.waiting_first_review ?? 0) >= 5 ? 'up-bad' : undefined}>{m.prs.waiting_first_review ?? 0}</b>
+            <span className="flow-note">open PRs over 24 hours with no review yet</span>
+          </div>
+        </section>
+      )}
+
       {data.signals.length > 0 && (
         <section className="signals" aria-label="What lowered the score">
           <h3>What lowered the score</h3>

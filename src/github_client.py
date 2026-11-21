@@ -27,7 +27,7 @@ query($owner: String!, $name: String!, $since: GitTimestamp!,
       nodes {
         number state createdAt updatedAt mergedAt
         author { __typename login }
-        reviews(first: 50) { nodes { author { __typename login } } }
+        reviews(first: 50) { nodes { submittedAt author { __typename login } } }
       }
     }
     defaultBranchRef {
@@ -100,6 +100,12 @@ def _as_pr(node):
         "updated_at": node["updatedAt"],
         "merged_at": node["mergedAt"],
         "user": {"login": author.get("login"), "type": author.get("__typename")} if author else None,
+        # For time to first review: when someone other than the author first reviewed it.
+        "first_review_at": min((r["submittedAt"] for r in (node.get("reviews") or {}).get("nodes", [])
+                                if r.get("submittedAt") and r.get("author") and not _is_bot(r["author"])
+                                and r["author"].get("login") != author.get("login")), default=None),
+        # For cycle time; filled in by _add_first_commits for merged PRs only.
+        "first_commit_at": None,
     }
 
 
@@ -110,6 +116,29 @@ def _as_commit(node):
         "author": {"login": login} if login else None,
         "commit": {"author": {"name": author.get("name") or "Unknown"}, "committer": {"date": node["committedDate"]}},
     }
+
+
+def _add_first_commits(owner, repo, prs, since):
+    """Adds when each merged PR's first commit was written, for cycle time.
+
+    Asking for commits inside the main query made it about twice as slow, so this is a
+    second, small query for just the PRs merged in the window (100 per request).
+    """
+    merged = [pr for pr in prs if pr["merged_at"] and _parse(pr["merged_at"]) >= since]
+    for start in range(0, len(merged), 100):
+        batch = merged[start:start + 100]
+        fields = " ".join(f"p{pr['number']}: pullRequest(number: {pr['number']}) {{ commits(first: 1) {{ nodes {{ commit {{ authoredDate }} }} }} }}"
+                          for pr in batch)
+        try:
+            response = requests.post(GRAPHQL, headers=_headers(), timeout=30, json={
+                "query": f"query($owner: String!, $name: String!) {{ repository(owner: $owner, name: $name) {{ {fields} }} }}",
+                "variables": {"owner": owner, "name": repo}})
+            found = ((response.json().get("data") or {}).get("repository") or {})
+        except (requests.RequestException, ValueError):
+            return  # cycle time is a bonus; the rest of the analysis doesn't need it
+        for pr in batch:
+            nodes = ((found.get(f"p{pr['number']}") or {}).get("commits") or {}).get("nodes") or []
+            pr["first_commit_at"] = nodes[0]["commit"]["authoredDate"] if nodes else None
 
 
 def _is_bot_commit(node):
@@ -172,6 +201,8 @@ def fetch_repo_activity(owner, repo, tz=ZoneInfo("UTC")):
         if prs_done and commits_done:
             break
         variables["withPrs"], variables["withCommits"] = not prs_done, not commits_done
+
+    _add_first_commits(owner, repo, prs, since)
 
     # Stopped after MAX_PAGES with more still in the window, so the counts are minimums.
     prs_capped, commits_capped = not prs_done, not commits_done

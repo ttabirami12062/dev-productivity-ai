@@ -258,3 +258,12 @@ a.cite:hover { background: var(--accent); color: #fff; }
 .changes li { padding: 8px 12px 8px 14px; border-radius: 8px; font-size: 14px; border-left: 4px solid; }
 .changes li.worse { background: var(--bad-soft); border-color: var(--bad); color: #7A231C; }
 .changes li.better { background: var(--good-soft); border-color: var(--good); color: #1B5E35; }
+
+/* how quickly work moves */
+.flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
+.flow-item { background: var(--sheet); border: 1px solid var(--rule); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.flow-label { font: 500 12px var(--body); color: var(--ink-2); }
+.flow-item b { font-family: var(--display); font-size: 24px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.flow-item b.up-bad { color: var(--bad); }
+.flow-note { font-size: 12px; color: var(--ink-3); }
+@media (max-width: 860px) { .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

@@ -84,6 +84,8 @@ export default function Guide({ open, onClose, timeZone }: { open: boolean; onCl
                 <tr><td>One person does over half the reviews</td><td>-12</td></tr>
                 <tr><td>One person does over 70% of the reviews</td><td>-25</td></tr>
                 <tr><td>One person makes over 80% of the commits</td><td>-10</td></tr>
+                <tr><td>PRs wait over 24 hours for a first review</td><td>-10</td></tr>
+                <tr><td>Over half of merged PRs had no review</td><td>-10</td></tr>
               </tbody>
             </table>
             <p>
@@ -109,6 +111,15 @@ export default function Guide({ open, onClose, timeZone }: { open: boolean; onCl
               <Term word="Commits by top author">
                 How much of the code one person writes. High is normal for small projects, but in a team it means knowledge sits with one person.
               </Term>
+            </dl>
+          </Section>
+
+          <Section title="How quickly work moves">
+            <dl>
+              <Term word="Time to first review">How long a new PR waits before someone other than its author first reviews it. The purest sign of a review bottleneck.</Term>
+              <Term word="Cycle time">From the first commit to merge: the whole journey of a change, including the time before the PR was opened.</Term>
+              <Term word="Merged without review">Merged PRs that nobody else reviewed. Normal for solo projects, a quality risk for teams.</Term>
+              <Term word="Waiting for a first look">Open PRs that have waited over 24 hours without any review yet.</Term>
             </dl>
           </Section>
 

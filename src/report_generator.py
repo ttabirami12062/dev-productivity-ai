@@ -62,6 +62,9 @@ What lowered the score: {' '.join(signals) if signals else 'nothing'}
 PRs: {prs['total']}{'+ (more than we read)' if metrics.get('capped', {}).get('prs') else ''} active, {prs['merged']} merged, {prs['open']} open ({prs['stale_open']} open over 3 days), {prs['closed_unmerged']} closed without merging
 Median time from open to merge: {prs['median_merge_hours']} hours{f" (about {duration(prs['median_merge_hours'])})" if prs['median_merge_hours'] and prs['median_merge_hours'] >= 48 else ''}
 Median wait to merge, by week: {weekly}
+Median time to first review by someone else: {duration(prs['median_first_review_hours']) if prs.get('median_first_review_hours') is not None else 'no reviews'}
+Median cycle time, first commit to merge: {duration(prs['median_cycle_hours']) if prs.get('median_cycle_hours') is not None else 'unknown'}
+Merged PRs with no review from anyone else: {prs.get('merged_unreviewed', 'unknown')} of {prs['merged']}; open PRs waiting over 24 hours for a first review: {prs.get('waiting_first_review', 'unknown')}
 Reviews: {reviews['total']} on {reviews['reviewed_prs']} merged PRs; by person: {reviews['per_reviewer'] or 'none'}{f"; top reviewer {reviews['top_reviewer']} did {reviews['top_share']}%" if reviews['total'] else ''}
 Commits: {commits['total']}{'+ (more than we read)' if metrics.get('capped', {}).get('commits') else ''}; by person: {commits['per_author']}{f"; top author {commits['top_author']} made {commits['top_share']}%" if commits['total'] else ''}"""
 

@@ -22,6 +22,10 @@ export interface Metrics {
     stale_open: number;
     closed_unmerged: number;
     median_merge_hours: number | null;
+    median_first_review_hours?: number | null;
+    median_cycle_hours?: number | null;
+    merged_unreviewed?: number;
+    waiting_first_review?: number;
     weekly: Week[];
   };
   reviews: {

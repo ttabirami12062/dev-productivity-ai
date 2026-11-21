@@ -40,7 +40,7 @@ flowchart LR
 ```
 
 1. **Collect.** The FastAPI backend pulls six weeks of pull requests, their reviews and the commits in one to three GitHub GraphQL requests, leaving out bots. (The first version used the REST API and needed up to 45 requests, one per PR's reviews.) The six weeks are aligned to the visitor's own time zone, so a PR merged at 7:30pm on October 11 in Oklahoma lands in the same week the visitor sees on GitHub.
-2. **Measure.** It calculates the median time from opening a PR to merging it, week by week; how many PRs have been open for more than three days; and how concentrated reviews and commits are.
+2. **Measure.** It calculates the median time from opening a PR to merging it, week by week; the time to a first review by someone else; cycle time from first commit to merge; how many merged PRs nobody else reviewed; how many PRs are waiting for a first look or have been open for more than three days; and how concentrated reviews and commits are.
 3. **Score.** The score starts at 100 and loses points for each warning sign. Every deduction comes with a plain-language reason, so the score is never a black box.
 
    | Warning sign | Points |
@@ -50,6 +50,8 @@ flowchart LR
    | 2-4 / 5+ PRs open for more than 3 days | -8 / -15 |
    | One person does over 50% / 70% of reviews | -12 / -25 |
    | One person makes over 80% of commits | -10 |
+   | PRs wait over 24 hours for a first review | -10 |
+   | Over half of merged PRs had no review from anyone else | -10 |
 
    Solo projects aren't penalized for having one person do everything. Projects with very little activity are labelled "too little activity" instead of getting a misleading score, and projects that switch pull requests off, like the Linux kernel, are judged on commits alone.
 4. **Retrieve.** The warning signs are embedded and searched against a Pinecone index of past incident reports and sprint retrospectives. Each match comes back with a similarity score that's shown to the user. A team can create a private team space and add its own incident reports, retros and postmortems (pasted, or as .txt, .md or .pdf files); each team gets its own Pinecone namespace, and reports run from the team's link search only that team's documents, marked "Your team's document".
@@ -81,6 +83,7 @@ A "How to read this" panel in the app explains every number, chart and label in 
 | Visitor ratings stored as Langfuse scores on the report's trace | Feedback survives redeploys (Render's disk doesn't) and sits next to the exact report it rates; names and emails go only to the owner's inbox |
 | Langfuse tracing, switched off when keys are absent | Latency, tokens and cost per step are visible in production, while CI and fresh checkouts run without it |
 | Exact library versions in `requirements.txt` | An unpinned dependency update is what originally broke the live site |
+| First-commit times in a second, merged-only query | Asking for every PR's commits inside the main query doubled the fetch time (about 9.6s against 4.2s); a separate query for merged PRs adds about 1.2s |
 | GitHub GraphQL instead of REST | One query returns PRs with their reviews; a busy repo went from 45 requests and 9.3s to 3 requests and 4.4s, with identical results |
 | Read-only GitHub token scoped to public repositories | The least access the job needs |
 | A scheduled health check every 10 minutes | Keeps the free Render server from sleeping, so visitors don't wait a minute for it to wake |
@@ -131,7 +134,8 @@ These are honest gaps, and the next things on the roadmap.
 
 - [x] Teams upload their own incident reports and retrospectives, stored in a separate Pinecone namespace per team
 - [x] Store daily snapshots in Postgres, collected by a nightly job, with month-over-month comparisons
-- [ ] More signals: cycle time from first commit, time to first review, code churn, files with repeated bug fixes, after-hours work in each contributor's time zone
+- [x] Time to first review, cycle time from first commit, merged without review, and PRs waiting for a first look
+- [ ] More signals: code churn, files with repeated bug fixes, after-hours work in each contributor's time zone
 - [x] Langfuse tracing for latency, tokens and cost per report
 - [x] A second model that checks each cited source actually supports the claim (in CI), plus a number check on every live report
 - [ ] A weekly email report for managers

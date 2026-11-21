@@ -70,7 +70,20 @@ def calculate_metrics(activity):
             merged.append((merged_at, (merged_at - _parse(pr["created_at"])).total_seconds() / 3600))
     merge_hours = [h for _, h in merged]
 
+    merged_prs = [pr for pr in prs if pr.get("merged_at") and _parse(pr["merged_at"]) >= since]
+
+    # Time to first review: from opening a PR to the first review by someone else,
+    # for PRs opened in the window that got one.
+    first_review_hours = [(_parse(pr["first_review_at"]) - _parse(pr["created_at"])).total_seconds() / 3600
+                          for pr in prs if pr.get("first_review_at") and _parse(pr["created_at"]) >= since]
+    # Cycle time: from the first commit to merge, the whole journey of a change.
+    cycle_hours = [max(0.0, (_parse(pr["merged_at"]) - _parse(pr["first_commit_at"])).total_seconds() / 3600)
+                   for pr in merged_prs if pr.get("first_commit_at")]
+    merged_unreviewed = [pr for pr in merged_prs if "first_review_at" in pr and not pr["first_review_at"]]
+
     open_prs = [pr for pr in prs if pr["state"] == "open"]
+    waiting_first_review = [pr for pr in open_prs if "first_review_at" in pr and not pr["first_review_at"]
+                            and (until - _parse(pr["created_at"])).total_seconds() / 3600 > MERGE_TARGET_HOURS]
     stale = [pr for pr in open_prs if (until - _parse(pr["created_at"])).total_seconds() / 3600 > STALE_OPEN_HOURS]
     closed_unmerged = [pr for pr in prs if pr["state"] == "closed" and not pr.get("merged_at")]
 
@@ -109,6 +122,10 @@ def calculate_metrics(activity):
             "stale_open": len(stale),
             "closed_unmerged": len(closed_unmerged),
             "median_merge_hours": round(median(merge_hours), 1) if merge_hours else None,
+            "median_first_review_hours": round(median(first_review_hours), 1) if first_review_hours else None,
+            "median_cycle_hours": round(median(cycle_hours), 1) if cycle_hours else None,
+            "merged_unreviewed": len(merged_unreviewed),
+            "waiting_first_review": len(waiting_first_review),
             "weekly": _weekly_merge_hours(merged, window_end),
         },
         "reviews": {
@@ -155,8 +172,17 @@ def calculate_health_score(metrics):
         score -= 8
         signals.append(f"{prs['stale_open']} PRs have been open for more than 3 days.")
 
+    first_review = prs.get("median_first_review_hours")
+    if not metrics["solo"] and first_review is not None and first_review > MERGE_TARGET_HOURS:
+        score -= 10
+        signals.append(f"PRs wait {duration(first_review)} before anyone reviews them.")
+
     # Workload balance only means something when there is a team to balance it across.
     if not metrics["solo"]:
+        unreviewed = prs.get("merged_unreviewed") or 0
+        if prs["merged"] >= 5 and unreviewed / prs["merged"] > 0.5:
+            score -= 10
+            signals.append(f"{unreviewed} of {prs['merged']} merged PRs had no review from anyone else.")
         if reviews["total"] >= 5 and reviews["top_share"] > 70:
             score -= 25
             signals.append(f"{reviews['top_reviewer']} did {reviews['top_share']}% of all reviews.")

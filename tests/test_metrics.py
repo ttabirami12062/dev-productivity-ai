@@ -72,6 +72,30 @@ def test_repo_without_pull_requests():
     assert not metrics["uses_prs"] and not metrics["quiet"]
 
 
+def test_first_review_cycle_time_and_unreviewed_merges():
+    created = NOW - timedelta(days=5)
+    def reviewed_pr(number, review_after, commit_before, merge_after, reviewed=True):
+        return {"number": number, "user": {"login": "dev"}, "state": "closed", "created_at": iso(created),
+                "updated_at": iso(created + timedelta(hours=merge_after)), "merged_at": iso(created + timedelta(hours=merge_after)),
+                "first_review_at": iso(created + timedelta(hours=review_after)) if reviewed else None,
+                "first_commit_at": iso(created - timedelta(hours=commit_before))}
+    prs = [reviewed_pr(1, 2, 10, 20), reviewed_pr(2, 4, 20, 30), reviewed_pr(3, 0, 0, 1, reviewed=False)]
+    m = calculate_metrics(activity(prs, [commit("dev"), commit("ana")], {1: [review("ana")], 2: [review("ana")]}))
+    assert m["prs"]["median_first_review_hours"] == 3.0    # reviews after 2h and 4h
+    assert m["prs"]["median_cycle_hours"] == 30.0          # 30h, 50h and 1h from first commit to merge
+    assert m["prs"]["merged_unreviewed"] == 1
+
+
+def test_slow_first_review_lowers_a_teams_score():
+    created = NOW - timedelta(days=6)
+    prs = [{"number": i, "user": {"login": "dev"}, "state": "closed", "created_at": iso(created), "updated_at": iso(created),
+            "merged_at": iso(created + timedelta(hours=60)), "first_review_at": iso(created + timedelta(hours=50)),
+            "first_commit_at": iso(created)} for i in range(3)]
+    m = calculate_metrics(activity(prs, [commit("dev"), commit("ana")], {i: [review("ana")] for i in range(3)}))
+    score, signals = calculate_health_score(m)
+    assert any("before anyone reviews them" in s for s in signals), signals
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
