@@ -120,6 +120,11 @@ export default function Guide({ open, onClose, timeZone }: { open: boolean; onCl
               <Term word="Cycle time">From the first commit to merge: the whole journey of a change, including the time before the PR was opened.</Term>
               <Term word="Merged without review">Merged PRs that nobody else reviewed. Normal for solo projects, a quality risk for teams.</Term>
               <Term word="Waiting for a first look">Open PRs that have waited over 24 hours without any review yet.</Term>
+              <Term word="Outside working hours">
+                Commits made before 8am, after 9pm or at weekends, on each author's own clock (GitHub keeps the time zone each commit was made in).
+                It never lowers the score: volunteers on open-source projects often work evenings, but in a company team a high share can be an
+                early burnout sign. Commits made through GitHub's website carry no time zone and are left out.
+              </Term>
             </dl>
           </Section>
 

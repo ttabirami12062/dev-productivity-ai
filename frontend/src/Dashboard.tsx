@@ -143,6 +143,17 @@ export default function Dashboard({ data, onAddHistory }: { data: Analysis; onAd
             </b>
             <span className="flow-note">merged PRs nobody else reviewed</span>
           </div>
+          {m.commits.after_hours?.share != null && (
+            <div className="flow-item">
+              <span className="flow-label">Outside working hours</span>
+              <b>{m.commits.after_hours.share}%</b>
+              <span className="flow-note">
+                of commits before 8am, after 9pm or at weekends, on each author's own clock
+                {m.commits.after_hours.people.length > 0 && `; most of all ${m.commits.after_hours.people.map((p) => `${p.person} (${p.share}%)`).join(', ')}`}.
+                Information only: normal for volunteer projects.
+              </span>
+            </div>
+          )}
           <div className="flow-item">
             <span className="flow-label">Waiting for a first look</span>
             <b className={(m.prs.waiting_first_review ?? 0) >= 5 ? 'up-bad' : undefined}>{m.prs.waiting_first_review ?? 0}</b>

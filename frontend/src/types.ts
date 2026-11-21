@@ -37,6 +37,7 @@ export interface Metrics {
   };
   commits: {
     total: number;
+    after_hours?: { counted: number; share: number | null; people: { person: string; share: number; commits: number }[] };
     per_author: Record<string, number>;
     top_author: string | null;
     top_share: number;

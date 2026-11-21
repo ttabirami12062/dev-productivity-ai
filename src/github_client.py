@@ -35,7 +35,7 @@ query($owner: String!, $name: String!, $since: GitTimestamp!,
         ... on Commit {
           history(first: 100, after: $commitCursor, since: $since) @include(if: $withCommits) {
             pageInfo { hasNextPage endCursor }
-            nodes { committedDate author { name user { login } } }
+            nodes { committedDate author { name date user { login } } }
           }
         }
       }
@@ -114,7 +114,9 @@ def _as_commit(node):
     login = (author.get("user") or {}).get("login")
     return {
         "author": {"login": login} if login else None,
-        "commit": {"author": {"name": author.get("name") or "Unknown"}, "committer": {"date": node["committedDate"]}},
+        # author.date keeps the author's own UTC offset (e.g. 20:54+05:30), unlike committedDate.
+        "commit": {"author": {"name": author.get("name") or "Unknown", "date": author.get("date")},
+                   "committer": {"date": node["committedDate"]}},
     }
 
 

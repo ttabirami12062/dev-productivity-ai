@@ -40,7 +40,7 @@ flowchart LR
 ```
 
 1. **Collect.** The FastAPI backend pulls six weeks of pull requests, their reviews and the commits in one to three GitHub GraphQL requests, leaving out bots. (The first version used the REST API and needed up to 45 requests, one per PR's reviews.) The six weeks are aligned to the visitor's own time zone, so a PR merged at 7:30pm on October 11 in Oklahoma lands in the same week the visitor sees on GitHub.
-2. **Measure.** It calculates the median time from opening a PR to merging it, week by week; the time to a first review by someone else; cycle time from first commit to merge; how many merged PRs nobody else reviewed; how many PRs are waiting for a first look or have been open for more than three days; and how concentrated reviews and commits are.
+2. **Measure.** It calculates the median time from opening a PR to merging it, week by week; the time to a first review by someone else; cycle time from first commit to merge; how many merged PRs nobody else reviewed; how many PRs are waiting for a first look or have been open for more than three days; how concentrated reviews and commits are; and the share of commits made before 8am, after 9pm or at weekends on each author's own clock, which is shown but never scored, since volunteers on open-source projects often work evenings.
 3. **Score.** The score starts at 100 and loses points for each warning sign. Every deduction comes with a plain-language reason, so the score is never a black box.
 
    | Warning sign | Points |
@@ -135,7 +135,8 @@ These are honest gaps, and the next things on the roadmap.
 - [x] Teams upload their own incident reports and retrospectives, stored in a separate Pinecone namespace per team
 - [x] Store daily snapshots in Postgres, collected by a nightly job, with month-over-month comparisons
 - [x] Time to first review, cycle time from first commit, merged without review, and PRs waiting for a first look
-- [ ] More signals: code churn, files with repeated bug fixes, after-hours work in each contributor's time zone
+- [x] After-hours work on each author's own clock (information only)
+- [ ] More signals: code churn and files with repeated bug fixes
 - [x] Langfuse tracing for latency, tokens and cost per report
 - [x] A second model that checks each cited source actually supports the claim (in CI), plus a number check on every live report
 - [ ] A weekly email report for managers

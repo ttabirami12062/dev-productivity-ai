@@ -22,6 +22,34 @@ def _parse(ts):
     return datetime.fromisoformat(ts.replace("Z", "+00:00")) if ts else None
 
 
+def _after_hours(commits):
+    """Share of commits made before 8am, after 9pm or at weekends on the author's own clock.
+
+    Only commits that carry a real UTC offset count: ones made through GitHub's website
+    show plain UTC ('Z'), which says nothing about the person's local time.
+    """
+    counted, late, by_person = 0, 0, {}
+    for commit in commits:
+        stamp = (commit.get("commit", {}).get("author") or {}).get("date")
+        if not stamp or stamp.endswith("Z"):
+            continue
+        local = datetime.fromisoformat(stamp)
+        is_late = local.hour < 8 or local.hour >= 21 or local.weekday() >= 5
+        counted += 1
+        late += is_late
+        person = _person(commit)
+        total, after = by_person.get(person, (0, 0))
+        by_person[person] = (total + 1, after + is_late)
+    # People with enough commits for a share to mean something, most after-hours first.
+    people = sorted(((p, round(a / t * 100), t) for p, (t, a) in by_person.items() if t >= 5 and a / t >= 0.4),
+                    key=lambda x: -x[1])
+    return {
+        "counted": counted,
+        "share": round(late / counted * 100) if counted else None,
+        "people": [{"person": p, "share": s, "commits": t} for p, s, t in people[:3]],
+    }
+
+
 def _person(commit):
     # Prefer the GitHub login so one person with two git names counts once.
     if commit.get("author") and commit["author"].get("login"):
@@ -137,6 +165,7 @@ def calculate_metrics(activity):
         },
         "commits": {
             "total": len(activity["commits"]),
+            "after_hours": _after_hours(activity["commits"]),
             "per_author": dict(sorted(commit_counts.items(), key=lambda kv: -kv[1])),
             "top_author": top_author,
             "top_share": top_commit_share,

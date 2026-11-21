@@ -260,7 +260,7 @@ a.cite:hover { background: var(--accent); color: #fff; }
 .changes li.better { background: var(--good-soft); border-color: var(--good); color: #1B5E35; }
 
 /* how quickly work moves */
-.flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
+.flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 20px; }
 .flow-item { background: var(--sheet); border: 1px solid var(--rule); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .flow-label { font: 500 12px var(--body); color: var(--ink-2); }
 .flow-item b { font-family: var(--display); font-size: 24px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }

@@ -96,6 +96,19 @@ def test_slow_first_review_lowers_a_teams_score():
     assert any("before anyone reviews them" in s for s in signals), signals
 
 
+def test_after_hours_uses_each_authors_own_clock():
+    def c(login, stamp):
+        return {"author": {"login": login}, "commit": {"author": {"name": login, "date": stamp}}}
+    commits = [c("asha", "2026-11-18T22:30:00+05:30")] * 5 + [c("asha", "2026-11-18T10:00:00+05:30")] * 5 \
+        + [c("ben", "2026-11-18T10:00:00-06:00")] * 5 + [c("bot-ish", "2026-11-18T23:59:00Z")] * 5   # 'Z' = no real time zone
+    m = calculate_metrics(activity([], commits, {}))
+    ah = m["commits"]["after_hours"]
+    assert ah["counted"] == 15 and ah["share"] == 33          # 5 late out of 15 with a real offset
+    assert ah["people"] == [{"person": "asha", "share": 50, "commits": 10}]
+    score, _ = calculate_health_score(m)
+    assert score == 100                                       # information only, never a deduction
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
