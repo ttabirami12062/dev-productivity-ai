@@ -37,6 +37,9 @@ jobs:
     - name: Check month-over-month comparisons
       run: python tests/test_history.py
 
+    - name: Check email building
+      run: python tests/test_emails.py
+
     # Calls the real model, so it only runs when the OpenAI key secret is set.
     - name: Check report quality against the golden dataset
       if: ${{ env.OPENAI_API_KEY != '' }}

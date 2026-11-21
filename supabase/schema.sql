@@ -40,3 +40,24 @@ alter table public.daily_snapshots enable row level security;
 -- service_role is what the backend's secret key acts as; nobody else gets access.
 grant usage on schema public to service_role;
 grant select, insert, update, delete on public.tracked_repos, public.daily_snapshots to service_role;
+
+-- Weekly email reports. Subscriptions are made from a team space (its private link),
+-- so reports go to the team the project belongs to, not to anyone watching a stranger's repo.
+-- Every subscription must be confirmed from the email it was made for (double opt-in).
+create table if not exists public.subscriptions (
+  id            uuid primary key default gen_random_uuid(),
+  email         text not null,
+  repo          text not null,                -- "owner/name", lowercase
+  display_name  text not null,
+  team          text not null,                -- team space id; its documents ground the report
+  timezone      text not null default 'UTC',
+  token         text not null unique,         -- secret for the confirm and unsubscribe links
+  confirmed     boolean not null default false,
+  created_at    timestamptz not null default now(),
+  confirmed_at  timestamptz,
+  last_sent_at  timestamptz,
+  unique (email, repo, team)
+);
+
+alter table public.subscriptions enable row level security;
+grant select, insert, update, delete on public.subscriptions to service_role;

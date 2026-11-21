@@ -19,13 +19,10 @@ load_dotenv()
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from src.github_client import GitHubError, fetch_repo_activity
-from src.metrics import calculate_metrics, calculate_health_score, health_status
-from src.report_generator import generate_health_report
-from src.rag_pipeline import retrieve_history
 from src.observability import record_feedback, report_trace
-from src.citation_check import numbers_grounded
-from src.report_generator import team_data_text
+from src.pipeline import build_report
 from src import history as history_store
+from src import subscriptions
 from src.team_docs import TeamDocError, add_document, delete_document, is_team_id, list_documents, new_team_id, text_from_file
 
 logging.basicConfig(level=logging.INFO)
@@ -185,21 +182,7 @@ def analyze(body: AnalyzeRequest, request: Request):
     started = time.time()
     with report_trace(owner, repo, str(tz)) as record:
         try:
-            activity = fetch_repo_activity(owner, repo, tz)
-            metrics = calculate_metrics(activity)
-            score, signals = calculate_health_score(metrics)
-
-            try:
-                # A team's own documents come first; teams that haven't added any yet get the samples.
-                history = retrieve_history(signals, namespace=team) if team else []
-                if not history:
-                    history = retrieve_history(signals)
-            except Exception:
-                # A report without history is still useful, so don't fail the whole analysis.
-                log.exception("History search failed")
-                history = []
-
-            report, usage = generate_health_report(activity["owner"], activity["repo"], metrics, score, signals, history)
+            built = build_report(owner, repo, tz, team)
         except GitHubError as e:
             record(error=str(e))
             return _fail(str(e))
@@ -210,7 +193,9 @@ def analyze(body: AnalyzeRequest, request: Request):
                 return _fail("This demo has used up its AI budget for now. Please check back later.")
             return _fail("Something went wrong on our side while writing the report. Please try again in a minute.")
 
-        status = "quiet" if metrics["quiet"] else health_status(score)
+        activity, metrics, score, signals = built["activity"], built["metrics"], built["score"], built["signals"]
+        status, history, report, usage = built["status"], built["history"], built["report"], built["usage"]
+        grounded, unsupported = built["grounded"], built["unsupported"]
         # Tracked repos get today's numbers saved whenever someone analyzes them, too.
         tracked = False
         try:
@@ -219,12 +204,6 @@ def analyze(body: AnalyzeRequest, request: Request):
                 history_store.save_snapshot(activity["owner"], activity["repo"], metrics, score, status, signals)
         except Exception:
             log.exception("Saving history failed")
-        # Free check on every report: each number the model wrote must come from its inputs.
-        grounded, unsupported = numbers_grounded(
-            report, team_data_text(activity["owner"], activity["repo"], metrics, score, signals),
-            *(f"{h['title']}\n{h['text']}" for h in history), *signals)
-        if not grounded:
-            log.warning("Report for %s used numbers not in its data: %s", key, unsupported)
         record(score=score, status=status, headline=report["headline"], signals=signals,
                sources=[h["title"] for h in history], seconds=round(time.time() - started, 1),
                numbers_grounded=grounded, unsupported_numbers=unsupported)
@@ -310,6 +289,65 @@ def repo_history(owner: str, repo: str):
         log.exception("Reading history failed")
         return _fail("We couldn't load this project's history right now.")
     return {"success": True, "enabled": True, "tracked": tracked, "snapshots": rows, "changes": history_store.month_over_month(rows)}
+
+
+class SubscribeRequest(BaseModel):
+    email: str = Field(max_length=254)
+    owner: str = Field(max_length=100)
+    repo: str = Field(max_length=100)
+    team: str = Field(max_length=40)
+    timezone: str = Field("UTC", max_length=64)
+
+
+class TokenRequest(BaseModel):
+    token: str = Field(max_length=64)
+
+
+@app.post("/subscriptions")
+def subscribe(body: SubscribeRequest, request: Request):
+    """Weekly emails are only offered from a team space, for the team's own project."""
+    owner, repo = body.owner.strip(), body.repo.strip()
+    if not is_team_id(body.team):
+        return _fail("Weekly emails are set up from your team space. Open 'Your team's history' first.")
+    if not (NAME.match(owner) and NAME.match(repo)):
+        return _fail("That doesn't look like a GitHub repository.")
+    if _over_limit(_client_ip(request), _uploads_by_ip, UPLOAD_HOURLY_LIMIT):
+        return _fail("Too many changes in the last hour. Please try again a little later.")
+    try:
+        activity = fetch_repo_activity(owner, repo)  # confirms it's public, and gets GitHub's spelling
+        history_store.track(activity["owner"], activity["repo"])  # weekly emails come with trends
+        outcome = subscriptions.subscribe(body.email, activity["owner"], activity["repo"], body.team, str(_zone(body.timezone)))
+    except (GitHubError, history_store.HistoryError, subscriptions.SubscriptionError) as e:
+        return _fail(str(e))
+    except Exception:
+        log.exception("Subscribing failed")
+        return _fail("Something went wrong setting up the weekly email. Please try again in a minute.")
+    if outcome == "already":
+        return {"success": True, "message": "This email already gets the weekly report for this project."}
+    return {"success": True, "message": "Check your inbox and click the link to confirm. If it's not there, look in your spam folder."}
+
+
+@app.post("/subscriptions/confirm")
+def confirm_subscription(body: TokenRequest):
+    try:
+        name = subscriptions.confirm(body.token)
+    except subscriptions.SubscriptionError as e:
+        return _fail(str(e))
+    except Exception:
+        log.exception("Confirming a subscription failed")
+        return _fail("Something went wrong. Please try the link again in a minute.")
+    return {"success": True, "message": f"Confirmed. You'll get the report on {name} every Monday."}
+
+
+@app.post("/subscriptions/unsubscribe")
+def unsubscribe(body: TokenRequest):
+    try:
+        name = subscriptions.unsubscribe(body.token)
+    except Exception:
+        log.exception("Unsubscribing failed")
+        return _fail("Something went wrong. Please try the link again in a minute.")
+    return {"success": True, "message": f"Unsubscribed from {name}. Your email address has been deleted." if name
+            else "You're already unsubscribed."}
 
 
 @app.post("/teams")
