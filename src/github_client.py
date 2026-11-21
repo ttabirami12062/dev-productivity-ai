@@ -1,6 +1,9 @@
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
+
+from concurrent.futures import ThreadPoolExecutor
 
 import requests
 from dotenv import load_dotenv
@@ -25,7 +28,8 @@ query($owner: String!, $name: String!, $since: GitTimestamp!,
     pullRequests(first: 100, after: $prCursor, orderBy: {field: UPDATED_AT, direction: DESC}) @include(if: $withPrs) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        number state createdAt updatedAt mergedAt
+        number title state createdAt updatedAt mergedAt additions deletions
+        labels(first: 10) { nodes { name } }
         author { __typename login }
         reviews(first: 50) { nodes { submittedAt author { __typename login } } }
       }
@@ -106,7 +110,18 @@ def _as_pr(node):
                                 and r["author"].get("login") != author.get("login")), default=None),
         # For cycle time; filled in by _add_first_commits for merged PRs only.
         "first_commit_at": None,
+        "lines_changed": (node.get("additions") or 0) + (node.get("deletions") or 0),
+        "is_fix": _looks_like_fix(node),
+        "files": None,  # filled in for merged fixes by _add_first_commits
     }
+
+
+FIX_WORDS = re.compile(r"\b(fix|fixes|fixed|bug|bugfix|hotfix|regression|patch)\b", re.IGNORECASE)
+
+
+def _looks_like_fix(node):
+    labels = [l["name"].lower() for l in ((node.get("labels") or {}).get("nodes") or [])]
+    return bool(FIX_WORDS.search(node.get("title") or "")) or any("bug" in l or "regression" in l for l in labels)
 
 
 def _as_commit(node):
@@ -127,9 +142,11 @@ def _add_first_commits(owner, repo, prs, since):
     second, small query for just the PRs merged in the window (100 per request).
     """
     merged = [pr for pr in prs if pr["merged_at"] and _parse(pr["merged_at"]) >= since]
-    for start in range(0, len(merged), 100):
-        batch = merged[start:start + 100]
-        fields = " ".join(f"p{pr['number']}: pullRequest(number: {pr['number']}) {{ commits(first: 1) {{ nodes {{ commit {{ authoredDate }} }} }} }}"
+
+    def fetch(batch):
+        # Fix PRs also bring their file list, to spot files that keep needing fixes.
+        fields = " ".join(f"p{pr['number']}: pullRequest(number: {pr['number']}) {{ commits(first: 1) {{ nodes {{ commit {{ authoredDate }} }} }}"
+                          + (" files(first: 30) { nodes { path } }" if pr["is_fix"] else "") + " }"
                           for pr in batch)
         try:
             response = requests.post(GRAPHQL, headers=_headers(), timeout=30, json={
@@ -137,10 +154,17 @@ def _add_first_commits(owner, repo, prs, since):
                 "variables": {"owner": owner, "name": repo}})
             found = ((response.json().get("data") or {}).get("repository") or {})
         except (requests.RequestException, ValueError):
-            return  # cycle time is a bonus; the rest of the analysis doesn't need it
+            return  # cycle time and fix files are a bonus; the rest of the analysis doesn't need them
         for pr in batch:
-            nodes = ((found.get(f"p{pr['number']}") or {}).get("commits") or {}).get("nodes") or []
+            data = found.get(f"p{pr['number']}") or {}
+            nodes = (data.get("commits") or {}).get("nodes") or []
             pr["first_commit_at"] = nodes[0]["commit"]["authoredDate"] if nodes else None
+            if pr["is_fix"]:
+                pr["files"] = [f["path"] for f in ((data.get("files") or {}).get("nodes") or [])]
+
+    # Small batches in parallel: one big request with every fix PR's file list took ~8s on django.
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(fetch, [merged[i:i + 25] for i in range(0, len(merged), 25)]))
 
 
 def _is_bot_commit(node):

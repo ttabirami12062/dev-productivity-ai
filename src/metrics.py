@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timedelta, timezone
 from statistics import median
 
@@ -48,6 +49,36 @@ def _after_hours(commits):
         "share": round(late / counted * 100) if counted else None,
         "people": [{"person": p, "share": s, "commits": t} for p, s, t in people[:3]],
     }
+
+
+LARGE_PR_LINES = 400
+REPEAT_FIXES = 3
+
+
+def _pr_size(merged_prs):
+    sizes = [pr["lines_changed"] for pr in merged_prs if pr.get("lines_changed") is not None]
+    if not sizes:
+        return {"median_lines": None, "large_share": None, "large": 0}
+    large = sum(1 for s in sizes if s > LARGE_PR_LINES)
+    return {"median_lines": round(median(sizes)), "large_share": round(large / len(sizes) * 100), "large": large}
+
+
+# Files every fix touches as bookkeeping, plus tests (fixes add regression tests),
+# would otherwise top the list without being trouble spots.
+NOT_A_HOTSPOT = re.compile(r"(^|/)(docs?|\.github|tests?|__tests__|spec|fixtures?)/|(^|/)(AUTHORS|CHANGELOG|CHANGES|HISTORY|NEWS|README)[^/]*$"
+                           r"|(^|/)release[-_ ]?notes|\.(md|rst|txt|lock|snap)$|(\.|_|-)(test|spec)\.[a-z]+$|(^|/)(package-lock|yarn\.lock|pnpm-lock)",
+                           re.IGNORECASE)
+
+
+def _repeat_fixes(merged_prs):
+    """Source files touched by REPEAT_FIXES or more merged bug-fix PRs in the window."""
+    fixes = [pr for pr in merged_prs if pr.get("is_fix")]
+    counts = {}
+    for pr in fixes:
+        for path in {f for f in (pr.get("files") or []) if not NOT_A_HOTSPOT.search(f)}:
+            counts[path] = counts.get(path, 0) + 1
+    hot = sorted(((p, n) for p, n in counts.items() if n >= REPEAT_FIXES), key=lambda x: (-x[1], x[0]))
+    return {"fix_prs": len(fixes), "files": [{"path": p, "fixes": n} for p, n in hot[:5]]}
 
 
 def _person(commit):
@@ -154,6 +185,8 @@ def calculate_metrics(activity):
             "median_cycle_hours": round(median(cycle_hours), 1) if cycle_hours else None,
             "merged_unreviewed": len(merged_unreviewed),
             "waiting_first_review": len(waiting_first_review),
+            "size": _pr_size(merged_prs),
+            "repeat_fixes": _repeat_fixes(merged_prs),
             "weekly": _weekly_merge_hours(merged, window_end),
         },
         "reviews": {

@@ -109,6 +109,20 @@ def test_after_hours_uses_each_authors_own_clock():
     assert score == 100                                       # information only, never a deduction
 
 
+def test_pr_size_and_repeatedly_fixed_files():
+    merged_at = NOW - timedelta(days=3)
+    def fix(number, files, lines=50, is_fix=True):
+        return {"number": number, "user": {"login": "dev"}, "state": "closed", "created_at": iso(merged_at - timedelta(hours=5)),
+                "updated_at": iso(merged_at), "merged_at": iso(merged_at), "first_review_at": None, "first_commit_at": None,
+                "lines_changed": lines, "is_fix": is_fix, "files": files}
+    prs = [fix(1, ["src/parser.py", "docs/releases/1.2.txt", "tests/test_parser.py"]),
+           fix(2, ["src/parser.py", "AUTHORS"]), fix(3, ["src/parser.py", "src/cli.py"], lines=900),
+           fix(4, ["src/cli.py"], is_fix=False)]
+    m = calculate_metrics(activity(prs, [commit("dev")] * 5, {}))
+    assert m["prs"]["repeat_fixes"] == {"fix_prs": 3, "files": [{"path": "src/parser.py", "fixes": 3}]}
+    assert m["prs"]["size"] == {"median_lines": 50, "large_share": 25, "large": 1}
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

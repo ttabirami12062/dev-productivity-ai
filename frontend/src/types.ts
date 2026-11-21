@@ -26,6 +26,8 @@ export interface Metrics {
     median_cycle_hours?: number | null;
     merged_unreviewed?: number;
     waiting_first_review?: number;
+    size?: { median_lines: number | null; large_share: number | null; large: number };
+    repeat_fixes?: { fix_prs: number; files: { path: string; fixes: number }[] };
     weekly: Week[];
   };
   reviews: {

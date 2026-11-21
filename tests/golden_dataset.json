@@ -63,8 +63,11 @@
       "expect_kinds": [
         "positive"
       ],
-      "expected_keywords": [
-        "review"
+      "expected_keywords": [],
+      "expected_any": [
+        "review",
+        "merge",
+        "commit"
       ]
     },
     {

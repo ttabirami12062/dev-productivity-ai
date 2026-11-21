@@ -143,6 +143,26 @@ export default function Dashboard({ data, onAddHistory }: { data: Analysis; onAd
             </b>
             <span className="flow-note">merged PRs nobody else reviewed</span>
           </div>
+          {m.prs.size?.median_lines != null && (
+            <div className="flow-item">
+              <span className="flow-label">Typical PR size</span>
+              <b>{m.prs.size.median_lines} lines</b>
+              <span className="flow-note">
+                changed per merged PR; {m.prs.size.large_share}% were over 400 lines, which are slower to review and hide more bugs
+              </span>
+            </div>
+          )}
+          {m.prs.repeat_fixes && m.prs.repeat_fixes.fix_prs > 0 && (
+            <div className="flow-item">
+              <span className="flow-label">Fixed again and again</span>
+              <b>{m.prs.repeat_fixes.files.length ? `${m.prs.repeat_fixes.files.length} file${m.prs.repeat_fixes.files.length === 1 ? '' : 's'}` : 'None'}</b>
+              <span className="flow-note">
+                {m.prs.repeat_fixes.files.length
+                  ? `source files changed by 3 or more of the ${m.prs.repeat_fixes.fix_prs} bug-fix PRs: ${m.prs.repeat_fixes.files.map((f) => `${f.path.split('/').slice(-2).join('/')} (${f.fixes})`).join(', ')}`
+                  : `no source file needed 3 or more of the ${m.prs.repeat_fixes.fix_prs} bug-fix PRs`}
+              </span>
+            </div>
+          )}
           {m.commits.after_hours?.share != null && (
             <div className="flow-item">
               <span className="flow-label">Outside working hours</span>

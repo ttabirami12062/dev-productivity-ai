@@ -120,6 +120,13 @@ export default function Guide({ open, onClose, timeZone }: { open: boolean; onCl
               <Term word="Cycle time">From the first commit to merge: the whole journey of a change, including the time before the PR was opened.</Term>
               <Term word="Merged without review">Merged PRs that nobody else reviewed. Normal for solo projects, a quality risk for teams.</Term>
               <Term word="Waiting for a first look">Open PRs that have waited over 24 hours without any review yet.</Term>
+              <Term word="Typical PR size">
+                Lines changed in a typical merged PR, and the share over 400 lines. Large PRs take longer to review well and let more bugs through.
+              </Term>
+              <Term word="Fixed again and again">
+                Source files changed by three or more bug-fix PRs in six weeks (found from words like "fix" or "bug" in the title, or a bug label).
+                Docs, release notes, changelogs and test files are left out, because nearly every fix touches them.
+              </Term>
               <Term word="Outside working hours">
                 Commits made before 8am, after 9pm or at weekends, on each author's own clock (GitHub keeps the time zone each commit was made in).
                 It never lowers the score: volunteers on open-source projects often work evenings, but in a company team a high share can be an

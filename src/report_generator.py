@@ -67,6 +67,8 @@ Median time from open to merge: {prs['median_merge_hours']} hours{f" (about {dur
 Median wait to merge, by week: {weekly}
 Median time to first review by someone else: {duration(prs['median_first_review_hours']) if prs.get('median_first_review_hours') is not None else 'no reviews'}
 Median cycle time, first commit to merge: {duration(prs['median_cycle_hours']) if prs.get('median_cycle_hours') is not None else 'unknown'}
+Typical merged PR size: {prs.get('size', {}).get('median_lines')} lines changed; PRs over 400 lines: {prs.get('size', {}).get('large_share')}%
+Bug-fix PRs merged: {prs.get('repeat_fixes', {}).get('fix_prs', 'unknown')}; files fixed 3+ times: {', '.join(f"{f['path']} ({f['fixes']} fixes)" for f in prs.get('repeat_fixes', {}).get('files', [])) or 'none'}
 Merged PRs with no review from anyone else: {prs.get('merged_unreviewed', 'unknown')} of {prs['merged']}; open PRs waiting over 24 hours for a first review: {prs.get('waiting_first_review', 'unknown')}
 Reviews: {reviews['total']} on {reviews['reviewed_prs']} merged PRs; by person: {reviews['per_reviewer'] or 'none'}{f"; top reviewer {reviews['top_reviewer']} did {reviews['top_share']}%" if reviews['total'] else ''}
 After-hours commits (before 8am, after 9pm or weekends, author's own time zone): {f"{commits['after_hours']['share']}% of {commits['after_hours']['counted']} commits with a known time zone" if commits.get('after_hours', {}).get('share') is not None else 'unknown'}{'; mostly after hours: ' + ', '.join(f"{x['person']} {x['share']}% of {x['commits']}" for x in commits['after_hours']['people']) if commits.get('after_hours', {}).get('people') else ''}
