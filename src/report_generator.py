@@ -57,11 +57,11 @@ People active: {metrics['people']}{' (solo project, so workload balance does not
 {'This project does not use GitHub pull requests (they are switched off), so judge it on commits only and do not mention PR or review metrics.' if not metrics.get('uses_prs', True) else ''}
 Health score: {score}/100
 What lowered the score: {' '.join(signals) if signals else 'nothing'}
-PRs: {prs['total']} active, {prs['merged']} merged, {prs['open']} open ({prs['stale_open']} open over 3 days), {prs['closed_unmerged']} closed without merging
+PRs: {prs['total']}{'+ (more than we read)' if metrics.get('capped', {}).get('prs') else ''} active, {prs['merged']} merged, {prs['open']} open ({prs['stale_open']} open over 3 days), {prs['closed_unmerged']} closed without merging
 Median time from open to merge: {prs['median_merge_hours']} hours{f" (about {duration(prs['median_merge_hours'])})" if prs['median_merge_hours'] and prs['median_merge_hours'] >= 48 else ''}
 Median wait to merge, by week: {weekly}
 Reviews: {reviews['total']} on {reviews['reviewed_prs']} merged PRs; by person: {reviews['per_reviewer'] or 'none'}{f"; top reviewer {reviews['top_reviewer']} did {reviews['top_share']}%" if reviews['total'] else ''}
-Commits: {commits['total']}; by person: {commits['per_author']}{f"; top author {commits['top_author']} made {commits['top_share']}%" if commits['total'] else ''}"""
+Commits: {commits['total']}{'+ (more than we read)' if metrics.get('capped', {}).get('commits') else ''}; by person: {commits['per_author']}{f"; top author {commits['top_author']} made {commits['top_share']}%" if commits['total'] else ''}"""
 
 
 def _history_block(history):

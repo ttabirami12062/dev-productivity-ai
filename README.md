@@ -104,7 +104,7 @@ Before going live, the pipeline was also tested against twelve real projects, in
 | Frontend | React and TypeScript, hand-drawn SVG charts, hosted on Vercel |
 | Backend | Python 3.12, FastAPI, hosted on Render |
 | Data | GitHub REST API |
-| Retrieval | Pinecone serverless index, OpenAI `text-embedding-ada-002` embeddings, LangChain document loading and splitting |
+| Retrieval | Pinecone serverless index, OpenAI `text-embedding-ada-002` embeddings through LangChain, LangChain text splitting |
 | Generation | OpenAI `gpt-5.4-mini` with JSON output |
 | Observability | Langfuse traces for each report (retrieval, embedding and generation steps) |
 | CI | GitHub Actions: scoring tests, report evaluation, and the keep-awake job |
@@ -117,7 +117,7 @@ These are honest gaps, and the next things on the roadmap.
 
 - **The incident library is a sample.** It holds two example documents, an incident report and a sprint retrospective, about a fictional team. Every repository is compared with the same two, and the dashboard says so. Letting each team upload its own history is the next major feature.
 - **No stored history.** Each analysis covers six weeks fetched live, so there are no month-over-month trends yet.
-- **Sampling on busy repositories.** At most 300 PRs and 300 commits are read. Reviews are counted on every PR merged in the six weeks.
+- **Sampling on busy repositories.** At most 300 PRs and 300 commits are read; when a project has more, the dashboard shows the totals as "300+". Reviews are counted on every PR merged in the six weeks.
 - **Public repositories only.** Private repositories would need a GitHub App with read-only, per-repository access, plus login and per-company data separation.
 
 ## Roadmap

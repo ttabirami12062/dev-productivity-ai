@@ -14,6 +14,7 @@ export interface Metrics {
   solo: boolean;
   quiet: boolean;
   uses_prs: boolean;
+  capped?: { prs: boolean; commits: boolean };
   prs: {
     total: number;
     merged: number;

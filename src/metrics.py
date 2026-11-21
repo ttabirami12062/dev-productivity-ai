@@ -99,6 +99,8 @@ def calculate_metrics(activity):
         "people": len(people),
         "solo": len(people) <= 1,
         "quiet": len(merged) + len(activity["commits"]) < QUIET_ACTIVITY,
+        # True when a busy repo had more than we read, so totals are "at least".
+        "capped": {"prs": activity.get("prs_capped", False), "commits": activity.get("commits_capped", False)},
         "uses_prs": bool(prs),
         "prs": {
             "total": len(prs),

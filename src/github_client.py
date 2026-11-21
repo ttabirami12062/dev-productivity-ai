@@ -173,6 +173,9 @@ def fetch_repo_activity(owner, repo, tz=ZoneInfo("UTC")):
             break
         variables["withPrs"], variables["withCommits"] = not prs_done, not commits_done
 
+    # Stopped after MAX_PAGES with more still in the window, so the counts are minimums.
+    prs_capped, commits_capped = not prs_done, not commits_done
+
     if not prs and not commits:
         raise GitHubError("There were no pull requests or commits in the last six weeks, so there's nothing to analyze yet.")
 
@@ -186,6 +189,8 @@ def fetch_repo_activity(owner, repo, tz=ZoneInfo("UTC")):
         "pull_requests": prs,
         "commits": commits,
         "reviews": reviews,
+        "prs_capped": prs_capped,
+        "commits_capped": commits_capped,
     }
 
 

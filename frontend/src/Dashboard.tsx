@@ -9,7 +9,7 @@ const STATUS_LABEL = { healthy: 'Healthy', watch: 'Worth watching', at_risk: 'At
 const KIND_LABEL: Record<FindingKind, string> = { risk: 'Risk', action: 'Do this week', positive: 'Going well' };
 
 const fmtDate = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const plural = (n: number, word: string, capped = false) => `${n}${capped ? '+' : ''} ${word}${n === 1 && !capped ? '' : 's'}`;
 // Long waits read better in days: 726 hours is "30 days".
 const wait = (h: number) => (h < 48 ? { value: `${h}`, unit: 'h' } : { value: `${h / 24 < 10 ? (h / 24).toFixed(1).replace('.0', '') : Math.round(h / 24)}`, unit: ' days' });
 
@@ -116,7 +116,7 @@ export default function Dashboard({ data }: { data: Analysis }) {
             {m.commits.total > 0 && <span>%</span>}
           </div>
           <div className="vital-foot">
-            <span className="flat">{plural(m.commits.total, 'commit')}, {m.people === 1 ? '1 person' : `${m.people} people`}</span>
+            <span className="flat">{plural(m.commits.total, 'commit', m.capped?.commits)}, {m.people === 1 ? '1 person' : `${m.people} people`}</span>
           </div>
         </div>
       </section>
@@ -130,7 +130,8 @@ export default function Dashboard({ data }: { data: Analysis }) {
 
       <h2 className="section-title">The evidence</h2>
       <p className="section-sub">
-        From {plural(m.prs.total, 'pull request')} and {plural(m.commits.total, 'commit')} in the last {m.window.days / 7} weeks.
+        From {plural(m.prs.total, 'pull request', m.capped?.prs)} and {plural(m.commits.total, 'commit', m.capped?.commits)} in the last {m.window.days / 7} weeks.
+        {(m.capped?.prs || m.capped?.commits) && ' This is a very busy project, so only the most recent 300 of each were read.'}
       </p>
       {m.uses_prs && <div className="evidence">
         <div className="panel chart">
@@ -194,7 +195,7 @@ export default function Dashboard({ data }: { data: Analysis }) {
             <Cite n={githubNum} />
             <div>
               <b>GitHub activity</b>
-              <span>{plural(m.prs.total, 'PR')}, {plural(m.commits.total, 'commit')}, {plural(m.reviews.total, 'review')}</span>
+              <span>{plural(m.prs.total, 'PR', m.capped?.prs)}, {plural(m.commits.total, 'commit', m.capped?.commits)}, {plural(m.reviews.total, 'review')}</span>
             </div>
           </div>
           <p className="sources-note">
