@@ -2,7 +2,7 @@ import os
 from functools import lru_cache
 
 from dotenv import load_dotenv
-from langchain_community.document_loaders import DirectoryLoader, TextLoader
+from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pinecone import Pinecone, ServerlessSpec
@@ -46,7 +46,14 @@ def build_index():
                         spec=ServerlessSpec(cloud="aws", region="us-east-1"))
     index = pc.Index(INDEX_NAME)
 
-    documents = DirectoryLoader(DOCS_PATH, glob="*.txt", loader_cls=TextLoader).load()
+    # Plain file reading: langchain-community's loaders were only used for this and the
+    # package is being retired.
+    documents = []
+    for name in sorted(os.listdir(DOCS_PATH)):
+        if name.endswith(".txt"):
+            path = os.path.join(DOCS_PATH, name)
+            with open(path, encoding="utf-8") as f:
+                documents.append(Document(page_content=f.read(), metadata={"source": path}))
     chunks = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100).split_documents(documents)
     titles = {d.metadata["source"]: _title_for(d.metadata["source"], d.page_content) for d in documents}
 
