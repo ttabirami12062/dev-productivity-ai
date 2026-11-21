@@ -36,7 +36,8 @@ def run():
             continue
         for sub in group:
             try:
-                mailer.send(sub["email"], *mailer.report_email(display_name, team, built, sub["token"]))
+                mailer.send(sub["email"], *mailer.report_email(display_name, team, built, sub["token"]),
+                            headers=mailer.unsubscribe_headers(sub["token"]))
                 history._request("PATCH", "subscriptions", params={"id": f"eq.{sub['id']}"},
                                  json={"last_sent_at": datetime.now(timezone.utc).isoformat()})
                 sent += 1

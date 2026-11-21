@@ -16,6 +16,8 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(os.path.abs
 GMAIL_ADDRESS = os.getenv("GMAIL_ADDRESS")
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
 SITE_URL = (os.getenv("SITE_URL") or "https://dev-productivity-ai.vercel.app").rstrip("/")
+# The backend's public address, for Gmail's own Unsubscribe button (it needs a link that works without the website).
+API_PUBLIC_URL = (os.getenv("API_PUBLIC_URL") or "https://dev-productivity-ai.onrender.com").rstrip("/")
 ENABLED = bool(GMAIL_ADDRESS and GMAIL_APP_PASSWORD)
 
 STATUS = {"healthy": ("Healthy", "#1E8A4C"), "watch": ("Worth watching", "#C27A00"),
@@ -23,11 +25,13 @@ STATUS = {"healthy": ("Healthy", "#1E8A4C"), "watch": ("Worth watching", "#C27A0
 KIND = {"risk": ("Risk", "#C8372D"), "action": ("Do this week", "#0E6B57"), "positive": ("Going well", "#1E8A4C")}
 
 
-def send(to, subject, html, text):
+def send(to, subject, html, text, headers=None):
     message = MIMEMultipart("alternative")
     message["Subject"] = subject
     message["From"] = f"Dev Productivity AI <{GMAIL_ADDRESS}>"
     message["To"] = to
+    for name, value in (headers or {}).items():
+        message[name] = value
     message.attach(MIMEText(text, "plain"))
     message.attach(MIMEText(html, "html"))
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as server:
@@ -76,9 +80,17 @@ def report_email(display_name, team, built, token):
 <b>What lowered the score</b><ul style="margin:6px 0 0;padding-left:18px">{signals}</ul></div>
 <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%">{findings}</table>
 <p style="margin:20px 0"><a href="{dashboard}" style="background:#0E6B57;color:#FFFFFF;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600">Open the full dashboard</a></p>
-<p style="font-size:12px;color:#7F8D87;line-height:1.5">You get this because your team subscribed from its team space.
-<a href="{unsubscribe}" style="color:#7F8D87">Unsubscribe</a> in one click.</p>""")
+<div style="border-top:1px solid #DCE1DC;margin-top:20px;padding-top:14px;font-size:13px;color:#4B5A54;line-height:1.5">
+You get this because your team subscribed from its team space.<br>
+<b>Don't want these emails?</b> <a href="{unsubscribe}" style="color:#C8372D;font-weight:600">Unsubscribe</a> in one click.
+Your email address is deleted straight away.</div>""")
     text = "\n".join([f"{display_name}: weekly report", report["headline"], report["summary"], f"Health score: {score}/100 ({label})", ""]
                      + [f"- {KIND[f['kind']][0]}: {f['title']}. {f['detail']}" for f in report["findings"]]
                      + ["", f"Full dashboard: {dashboard}", f"Unsubscribe: {unsubscribe}"])
     return f"{display_name}: {report['headline']}", html, text
+
+
+def unsubscribe_headers(token):
+    """Makes Gmail and other apps show their own Unsubscribe button next to the sender."""
+    return {"List-Unsubscribe": f"<{API_PUBLIC_URL}/subscriptions/unsubscribe/{token}>",
+            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"}

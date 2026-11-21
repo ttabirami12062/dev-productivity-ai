@@ -10,6 +10,7 @@ from html import escape
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
@@ -348,6 +349,21 @@ def unsubscribe(body: TokenRequest):
         return _fail("Something went wrong. Please try the link again in a minute.")
     return {"success": True, "message": f"Unsubscribed from {name}. Your email address has been deleted." if name
             else "You're already unsubscribed."}
+
+
+@app.api_route("/subscriptions/unsubscribe/{token}", methods=["GET", "POST"], response_class=HTMLResponse)
+def unsubscribe_link(token: str):
+    """Target of Gmail's own Unsubscribe button: works on its own, without the website."""
+    try:
+        name = subscriptions.unsubscribe(token)
+        message = f"Unsubscribed from {escape(name)}. Your email address has been deleted." if name else "You're already unsubscribed."
+    except Exception:
+        log.exception("Unsubscribe link failed")
+        message = "Something went wrong. Please try again in a minute."
+    return f"""<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dev Productivity AI</title><body style="font-family:Helvetica,Arial,sans-serif;background:#F5F6F2;color:#15201C;padding:40px 16px">
+<div style="max-width:480px;margin:0 auto;background:#fff;border:1px solid #DCE1DC;border-radius:12px;padding:24px">
+<div style="font-weight:700;color:#0E6B57;margin-bottom:12px">Dev Productivity AI</div><p style="font-size:16px">{message}</p></div></body>"""
 
 
 @app.post("/teams")
